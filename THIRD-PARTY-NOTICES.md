@@ -1,14 +1,14 @@
 # Third-party notices
 
 Nosilence is licensed under AGPL-3.0-only. It depends on the open-source software
-listed below. Every license here is permissive (MIT or Apache-2.0) and compatible
+listed below. Every license here is permissive (MIT, Apache-2.0, BSD-3-Clause or 0BSD) and compatible
 with AGPL-3.0. Each package ships its own license text and copyright notice in its
 source; full license texts will be bundled with distributed builds (web and desktop).
 
 Keep this file up to date: every new dependency is checked for license compatibility
 and added here in the same change.
 
-Last reviewed: 2026-11-17.
+Last reviewed: 2026-11-17 (Phase 1).
 
 ## Server (Elixir, `server/mix.lock`)
 
@@ -50,9 +50,34 @@ Last reviewed: 2026-11-17.
 
 | Package | Version | License |
 |---|---|---|
+| @bufbuild/protobuf | 1.10.1 | Apache-2.0 AND BSD-3-Clause |
+| @floating-ui/core | 1.8.0 | MIT |
+| @floating-ui/dom | 1.8.0 | MIT |
+| @floating-ui/utils | 0.2.12 | MIT |
+| @livekit/components-core | 0.12.16 | Apache-2.0 |
+| @livekit/components-react | 2.9.25 | Apache-2.0 |
+| @livekit/mutex | 1.1.1 | Apache-2.0 |
+| @livekit/protocol | 1.53.0 | Apache-2.0 |
+| clsx | 2.1.1 | MIT |
+| events | 3.3.0 | MIT |
+| jose | 6.2.17 | MIT |
+| livekit-client | 2.24.1 | Apache-2.0 |
+| lodash.debounce | 4.0.8 | MIT |
+| loglevel | 1.9.2 | MIT |
+| machina | 7.0.1 | MIT |
 | react | 19.3.1 | MIT |
 | react-dom | 19.3.1 | MIT |
+| rxjs | 7.8.2 | Apache-2.0 |
 | scheduler | 0.28.0 | MIT |
+| sdp | 3.2.3 | MIT |
+| sdp-transform | 2.15.0 | MIT |
+| tslib | 2.8.1, 2.9.1 | 0BSD |
+| typed-emitter | 2.1.0 | MIT |
+| usehooks-ts | 3.1.1 | MIT |
+| webrtc-adapter | 9.0.6 | BSD-3-Clause |
+
+Not used: `@livekit/krisp-noise-filter` is an optional, proprietary LiveKit package
+and must not be added.
 
 Development-only tools (Vite, Vitest, TypeScript, oxlint, Prettier, Testing Library)
 are not shipped to users.

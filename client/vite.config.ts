@@ -8,6 +8,14 @@ export default defineConfig({
   server: {
     // Loopback only, like the Docker services in infra/.
     host: '127.0.0.1',
+    // Same-origin API calls during development: no CORS setup needed.
+    proxy: {
+      '/api': 'http://127.0.0.1:4000',
+    },
+  },
+  build: {
+    // The LiveKit SDK is one ~600 kB chunk; it is loaded lazily when joining a room.
+    chunkSizeWarningLimit: 700,
   },
   test: {
     environment: 'jsdom',
