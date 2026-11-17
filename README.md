@@ -30,6 +30,18 @@ desktop/   Tauri shell around the client
 infra/     Docker setup for PostgreSQL and LiveKit
 ```
 
+## Local development
+
+Requirements: Docker Desktop, Erlang/OTP 29, Elixir 1.20, Rust, Node.js.
+
+Start PostgreSQL and LiveKit (ports bound to 127.0.0.1):
+
+```powershell
+cd infra
+Copy-Item .env.example .env   # then replace every change-me value
+docker compose up -d
+```
+
 ## Status
 
 Planning is done; implementation is starting. Nothing here is ready for use yet.

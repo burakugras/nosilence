@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# LiveKit config for local development. API keys come from LIVEKIT_KEYS (see .env).
+port: 7880
+log_level: info
+
+rtc:
+  tcp_port: 7881
+  # One UDP port for all media instead of a port range; Docker Desktop on
+  # Windows is slow with large UDP ranges.
+  udp_port: 7882
+  # Clients run on the same machine during development.
+  node_ip: 127.0.0.1
+  use_external_ip: false
+
+room:
+  # Default room capacity; the backend enforces the same configurable limit.
+  max_participants: 8
+  empty_timeout: 300
