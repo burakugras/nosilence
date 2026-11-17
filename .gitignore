@@ -1,0 +1,41 @@
+# Secrets and local config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+CLAUDE.local.md
+
+# Elixir / Phoenix
+/server/_build/
+/server/deps/
+/server/cover/
+/server/doc/
+/server/priv/static/assets/
+*.ez
+erl_crash.dump
+.elixir_ls/
+.lexical/
+
+# Node / React
+node_modules/
+dist/
+coverage/
+*.log
+npm-debug.log*
+
+# Rust / Tauri
+target/
+/desktop/src-tauri/gen/
+
+# Docker volumes
+/infra/data/
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
