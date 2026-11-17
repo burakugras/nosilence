@@ -6,10 +6,18 @@ import {
   useIsSpeaking,
   useLocalParticipant,
   useParticipants,
+  useRemoteParticipants,
 } from '@livekit/components-react'
-import { LocalAudioTrack, Track, type Participant } from 'livekit-client'
-import { useEffect, useState } from 'react'
+import {
+  LocalAudioTrack,
+  RemoteAudioTrack,
+  Track,
+  type Participant,
+  type RemoteParticipant,
+} from 'livekit-client'
+import { useEffect, useRef, useState } from 'react'
 import type { VoiceJoin } from '../api/voice'
+import { summariseInbound, type InboundAudioSample, type InboundAudioSummary } from './stats'
 
 type Props = {
   join: VoiceJoin
@@ -36,6 +44,7 @@ export function VoiceRoom({ join, onLeave }: Props) {
         </button>
       </div>
       <ConnectionStats />
+      <IncomingAudioStats />
       {/* Plays every remote participant's audio. */}
       <RoomAudioRenderer />
     </LiveKitRoom>
@@ -104,5 +113,66 @@ function ConnectionStats() {
       <dt>Packets lost</dt>
       <dd>{stats.packetsLost ?? '–'}</dd>
     </dl>
+  )
+}
+
+const pct = (v?: number) => (v === undefined ? '–' : `${(v * 100).toFixed(1)} %`)
+const ms = (v?: number) => (v === undefined ? '–' : `${Math.round(v)} ms`)
+
+/**
+ * What we receive from each other participant over the last two seconds.
+ * "Concealed" is the share of audio the browser had to fill in because packets
+ * were missing or late; above about 2 % speech starts to sound choppy.
+ */
+function IncomingAudioStats() {
+  const participants = useRemoteParticipants()
+  if (participants.length === 0) return null
+  return (
+    <table className="stats-table">
+      <caption>Incoming audio</caption>
+      <thead>
+        <tr>
+          <th scope="col">From</th>
+          <th scope="col">Lost</th>
+          <th scope="col">Jitter</th>
+          <th scope="col">Concealed</th>
+        </tr>
+      </thead>
+      <tbody>
+        {participants.map((p) => (
+          <IncomingRow key={p.identity} participant={p} />
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+function IncomingRow({ participant }: { participant: RemoteParticipant }) {
+  const [summary, setSummary] = useState<InboundAudioSummary>({})
+  const previous = useRef<InboundAudioSample | undefined>(undefined)
+
+  useEffect(() => {
+    let cancelled = false
+    const timer = window.setInterval(async () => {
+      const track = participant.getTrackPublication(Track.Source.Microphone)?.audioTrack
+      if (!(track instanceof RemoteAudioTrack)) return
+      const current = await track.getReceiverStats()
+      if (cancelled || !current) return
+      setSummary(summariseInbound(current, previous.current))
+      previous.current = current
+    }, 2000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [participant])
+
+  return (
+    <tr>
+      <th scope="row">{participant.name || 'Anonymous'}</th>
+      <td>{pct(summary.lossRate)}</td>
+      <td>{ms(summary.jitterMs)}</td>
+      <td>{pct(summary.concealedRate)}</td>
+    </tr>
   )
 }

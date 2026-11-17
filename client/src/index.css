@@ -108,3 +108,20 @@ body {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+.stats-table {
+  border-collapse: collapse;
+  margin-top: 1rem;
+  color: var(--text-muted);
+}
+
+.stats-table caption {
+  text-align: left;
+  font-weight: 600;
+}
+
+.stats-table th,
+.stats-table td {
+  padding: 0.25rem 0.75rem 0.25rem 0;
+  text-align: left;
+}

@@ -42,6 +42,14 @@ Copy-Item .env.example .env   # then replace every change-me value
 docker compose up -d
 ```
 
+### Testing voice on one computer
+
+Open the two participants in **different browsers** (for example Chrome and Edge)
+and use headphones. Chrome's echo canceller takes audio played by *all* Chrome tabs
+into account: with two tabs of the same room, it treats your own voice coming back
+from the other tab as echo and cuts parts of it, so speech sounds choppy even though
+no packets are lost. This does not happen between separate devices.
+
 ## Status
 
 Planning is done; implementation is starting. Nothing here is ready for use yet.
