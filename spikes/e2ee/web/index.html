@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nosilence E2EE spike</title>
+    <style>
+      body { font: 15px/1.5 system-ui, sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; }
+      button { font: inherit; padding: 0.4rem 0.8rem; margin-right: 0.5rem; }
+      #status { font-weight: 600; }
+      table { border-collapse: collapse; margin: 1rem 0; } td, th { padding: 0.25rem 1rem 0.25rem 0; text-align: left; }
+      #log { background: #f4f4f6; padding: 0.75rem; white-space: pre-wrap; font: 13px/1.4 ui-monospace, Consolas, monospace; }
+      @media (prefers-color-scheme: dark) { body { background: #16161a; color: #ececf1; } #log { background: #222228; } }
+    </style>
+  </head>
+  <body>
+    <h1>E2EE spike</h1>
+    <p>Throwaway test page for roadmap phase 1.5. Pick one role per browser.</p>
+    <p>
+      <button data-role="creator">Join as creator (alfa)</button>
+      <button data-role="joiner">Join as joiner (bravo)</button>
+      <button data-role="outsider">Join as outsider (charlie)</button>
+    </p>
+    <p id="status">Not connected</p>
+    <table id="results">
+      <thead><tr><th>From</th><th>What this page receives</th><th>Peak level</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <pre id="log"></pre>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

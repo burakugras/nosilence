@@ -24,3 +24,4 @@ What becomes easier, what becomes harder, what we must do next.
 | ADR | Title |
 |---|---|
 | [0001](0001-stack-and-principles.md) | Stack and guiding principles |
+| [0002](0002-mls-in-the-browser.md) | MLS in the browser feeds LiveKit E2EE (phase 1.5 spike) |
