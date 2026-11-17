@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    name: Server (Elixir)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    env:
+      MIX_ENV: test
+      POSTGRES_USER: nosilence
+      POSTGRES_PASSWORD: ci-only-password
+    services:
+      postgres:
+        image: postgres:18.7-alpine
+        env:
+          POSTGRES_USER: nosilence
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: nosilence_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nosilence"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '29'
+          elixir-version: '1.20'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            server/deps
+            server/_build
+          key: mix-${{ runner.os }}-${{ hashFiles('server/mix.lock') }}
+      - run: mix deps.get
+      - run: mix compile --warnings-as-errors
+      - run: mix format --check-formatted
+      - run: mix deps.unlock --check-unused
+      - run: mix test
+
+  client:
+    name: Client (React)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
