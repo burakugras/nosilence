@@ -22,6 +22,15 @@ config :nosilence, NosilenceWeb.Endpoint,
   secret_key_base: "5aSxfr9O9TBMX7Eo3pewtwsYkLXwbHW9ebNNlCxj235Q3lHmRI7k+g00593wJReR",
   server: false
 
+config :nosilence, dev_voice_tokens: true
+
+# Fixed test values; tests never talk to a real LiveKit server.
+config :nosilence, Nosilence.Voice,
+  livekit_url: "ws://livekit.test:7880",
+  api_key: "test-api-key",
+  api_secret: "test-api-secret-that-is-at-least-32-bytes",
+  token_ttl_seconds: 600
+
 # In test we don't send emails
 config :nosilence, Nosilence.Mailer, adapter: Swoosh.Adapters.Test
 

@@ -54,6 +54,16 @@ config :nosilence, NosilenceWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :nosilence, dev_routes: true
 
+# Phase 1: unauthenticated voice token endpoint (see NosilenceWeb.DevVoiceController)
+config :nosilence, dev_voice_tokens: true
+
+# LiveKit runs in Docker (see infra/); keys are shared through infra/.env
+config :nosilence, Nosilence.Voice,
+  livekit_url: "ws://127.0.0.1:7880",
+  api_key: env.("LIVEKIT_API_KEY"),
+  api_secret: env.("LIVEKIT_API_SECRET"),
+  token_ttl_seconds: 600
+
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"
 

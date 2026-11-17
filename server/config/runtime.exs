@@ -57,6 +57,12 @@ if config_env() == :prod do
 
   config :nosilence, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
+  config :nosilence, Nosilence.Voice,
+    livekit_url: System.fetch_env!("LIVEKIT_URL"),
+    api_key: System.fetch_env!("LIVEKIT_API_KEY"),
+    api_secret: System.fetch_env!("LIVEKIT_API_SECRET"),
+    token_ttl_seconds: String.to_integer(System.get_env("LIVEKIT_TOKEN_TTL_SECONDS", "600"))
+
   config :nosilence, NosilenceWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
     http: [

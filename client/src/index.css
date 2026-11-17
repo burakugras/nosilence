@@ -35,3 +35,93 @@ body {
 .app p {
   color: var(--text-muted);
 }
+
+.join-form {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 20rem;
+}
+
+.join-form label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.join-form input,
+.join-form button,
+.controls button {
+  font: inherit;
+  padding: 0.5rem 0.75rem;
+}
+
+.field-error,
+.form-message {
+  margin: 0;
+  color: #c62828;
+}
+
+.participants {
+  list-style: none;
+  padding: 0;
+}
+
+.participants li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+}
+
+.participants .dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.participants .speaking .dot {
+  background: #2e7d32;
+  box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.3);
+}
+
+.controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: max-content auto;
+  gap: 0.25rem 1rem;
+  color: var(--text-muted);
+}
+
+.stats dd {
+  margin: 0;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.stats-table {
+  border-collapse: collapse;
+  margin-top: 1rem;
+  color: var(--text-muted);
+}
+
+.stats-table caption {
+  text-align: left;
+  font-weight: 600;
+}
+
+.stats-table th,
+.stats-table td {
+  padding: 0.25rem 0.75rem 0.25rem 0;
+  text-align: left;
+}
