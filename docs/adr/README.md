@@ -1,0 +1,26 @@
+# Architecture decision records
+
+One file per significant decision: `NNNN-short-title.md`, numbered in order.
+A record is never rewritten after it is accepted; a later record supersedes it.
+
+Template:
+
+```markdown
+# ADR NNNN: Title
+
+- Status: proposed | accepted | superseded by NNNN
+- Date: YYYY-MM-DD
+
+## Context
+What problem or constraint forces a decision.
+
+## Decision
+What we chose, and the main alternatives we rejected.
+
+## Consequences
+What becomes easier, what becomes harder, what we must do next.
+```
+
+| ADR | Title |
+|---|---|
+| [0001](0001-stack-and-principles.md) | Stack and guiding principles |
