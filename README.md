@@ -42,6 +42,14 @@ Copy-Item .env.example .env   # then replace every change-me value
 docker compose up -d
 ```
 
+If the services stop answering after the computer sleeps or Docker Desktop restarts
+(containers show "Up" but requests from Windows time out), Docker's port forwarding
+has dropped. Restart the containers:
+
+```powershell
+docker compose restart
+```
+
 ### Testing voice on one computer
 
 Open the two participants in **different browsers** (for example Chrome and Edge)
