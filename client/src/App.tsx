@@ -76,7 +76,7 @@ export default function App({ loadUser = currentUser }: Props) {
     path === '/invite' ? (
       <InvitePage token={params.get('token')} />
     ) : community ? (
-      <CommunityPage key={community[1]} communityId={community[1]} />
+      <CommunityPage key={community[1]} communityId={community[1]} currentUserId={user.id} />
     ) : (
       <CommunitiesPage />
     )

@@ -44,6 +44,14 @@ export function capacityError(value: string, max = 8): string | undefined {
 }
 
 /** Keeps only the fields that have an error. */
+export const MAX_MESSAGE = 2000
+
+export function messageError(text: string): string | undefined {
+  const trimmed = text.trim()
+  if (!trimmed) return 'Write a message first.'
+  if (trimmed.length > MAX_MESSAGE) return `Messages can be at most ${MAX_MESSAGE} characters.`
+}
+
 export function collect(checks: Record<string, string | undefined>): Errors {
   return Object.fromEntries(
     Object.entries(checks).filter((entry): entry is [string, string] => entry[1] !== undefined),

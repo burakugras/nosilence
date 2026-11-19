@@ -53,12 +53,35 @@ defmodule Nosilence.CommunitiesTest do
       join_fixture(owner, c, member)
 
       assert {:error, :forbidden} = Communities.delete_community(member, c.id)
-      assert :ok = Communities.delete_community(owner, c.id)
+      assert {:ok, %{voice_rooms: [_]}} = Communities.delete_community(owner, c.id)
       assert {:error, :not_found} = Communities.get_community(member, c.id)
     end
   end
 
   describe "channels" do
+    test "a new community has a voice and a text channel", %{channel: voice, text_channel: text} do
+      assert %{name: "General", kind: "voice", capacity: 8} = voice
+      assert %{name: "general", kind: "text", capacity: nil} = text
+    end
+
+    test "text channels have no capacity and cannot be joined for voice", %{owner: owner} = ctx do
+      assert {:ok, ch} =
+               Communities.create_channel(owner, ctx.community.id, %{
+                 "name" => "chat",
+                 "kind" => "text",
+                 "capacity" => 5
+               })
+
+      assert ch.capacity == nil
+      assert {:error, :not_found} = Communities.get_channel_for_voice(owner, ch.id)
+
+      assert {:error, %Ecto.Changeset{}} =
+               Communities.create_channel(owner, ctx.community.id, %{
+                 "name" => "x",
+                 "kind" => "video"
+               })
+    end
+
     test "the owner creates voice channels; capacity defaults to 8 and is limited", %{
       owner: owner,
       community: c
@@ -195,7 +218,7 @@ defmodule Nosilence.CommunitiesTest do
 
       assert {:error, :forbidden} = Communities.remove_member(member, c.id, owner.id)
       assert {:error, :not_found} = Communities.remove_member(owner, c.id, owner.id)
-      assert :ok = Communities.remove_member(owner, c.id, member.id)
+      assert {:ok, %{voice_rooms: [_]}} = Communities.remove_member(owner, c.id, member.id)
       assert {:error, :not_found} = Communities.get_community(member, c.id)
     end
 

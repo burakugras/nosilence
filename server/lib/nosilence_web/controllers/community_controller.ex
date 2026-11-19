@@ -3,6 +3,7 @@ defmodule NosilenceWeb.CommunityController do
   use NosilenceWeb, :controller
 
   alias Nosilence.Communities
+  alias Nosilence.Voice
   alias NosilenceWeb.ChangesetJSON
 
   action_fallback NosilenceWeb.FallbackController
@@ -39,8 +40,11 @@ defmodule NosilenceWeb.CommunityController do
   end
 
   def delete(conn, %{"id" => id}) do
-    with :ok <- Communities.delete_community(conn.assigns.current_user, id),
-         do: send_resp(conn, :no_content, "")
+    with {:ok, %{voice_rooms: rooms}} <-
+           Communities.delete_community(conn.assigns.current_user, id) do
+      Voice.close_rooms(rooms)
+      send_resp(conn, :no_content, "")
+    end
   end
 
   def members(conn, %{"id" => id}) do
@@ -50,8 +54,12 @@ defmodule NosilenceWeb.CommunityController do
   end
 
   def remove_member(conn, %{"id" => id, "user_id" => user_id}) do
-    with :ok <- Communities.remove_member(conn.assigns.current_user, id, user_id),
-         do: send_resp(conn, :no_content, "")
+    with {:ok, %{voice_rooms: rooms}} <-
+           Communities.remove_member(conn.assigns.current_user, id, user_id) do
+      # Removed members lose voice at once, not only when their token expires.
+      Voice.remove_from_rooms(rooms, user_id)
+      send_resp(conn, :no_content, "")
+    end
   end
 
   def leave(conn, %{"id" => id}) do

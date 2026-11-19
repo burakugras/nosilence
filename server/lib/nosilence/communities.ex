@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 defmodule Nosilence.Communities do
   @moduledoc """
-  Communities context: communities, members and roles, voice channels and invites.
+  Communities context: communities, members and roles, channels and invites.
 
   Every function that acts for a user checks membership and `Policy` first.
   Non-members get `{:error, :not_found}`, never `:forbidden`, so they cannot
@@ -13,6 +13,7 @@ defmodule Nosilence.Communities do
   alias Ecto.Multi
   alias Nosilence.Accounts.User
   alias Nosilence.Communities.{Channel, Community, Invite, Membership, Policy}
+  alias Nosilence.Events
   alias Nosilence.Repo
 
   @default_invite_hours 7 * 24
@@ -20,7 +21,7 @@ defmodule Nosilence.Communities do
 
   ## Communities
 
-  @doc "Creates a community owned by `user`, with one voice channel to start with."
+  @doc "Creates a community owned by `user`, with one voice and one text channel."
   def create_community(%User{} = user, attrs) do
     Multi.new()
     |> Multi.insert(:community, Community.changeset(%Community{}, attrs))
@@ -28,7 +29,10 @@ defmodule Nosilence.Communities do
       %Membership{community_id: c.id, user_id: user.id, role: "owner"}
     end)
     |> Multi.insert(:channel, fn %{community: c} ->
-      Channel.changeset(%Channel{community_id: c.id}, %{"name" => "General"})
+      Channel.changeset(%Channel{community_id: c.id}, %{"name" => "General", "kind" => "voice"})
+    end)
+    |> Multi.insert(:text_channel, fn %{community: c} ->
+      Channel.changeset(%Channel{community_id: c.id}, %{"name" => "general", "kind" => "text"})
     end)
     |> Repo.transaction()
     |> case do
@@ -48,24 +52,32 @@ defmodule Nosilence.Communities do
     )
   end
 
-  @doc "The community, its voice channels and the user's membership, for members only."
+  @doc "The community, its channels and the user's membership, for members only."
   def get_community(%User{} = user, community_id) do
     with {:ok, membership} <- authorize(user, community_id, :view) do
       community = Repo.get!(Community, community_id)
 
       channels =
         Repo.all(
-          from ch in Channel, where: ch.community_id == ^community.id, order_by: ch.inserted_at
+          from ch in Channel,
+            where: ch.community_id == ^community.id,
+            order_by: [ch.inserted_at, ch.name]
         )
 
       {:ok, %{community: community, channels: channels, membership: membership}}
     end
   end
 
+  @doc """
+  Deletes the community for everyone. Returns the ids of its voice channels
+  (their LiveKit rooms) so callers can close them.
+  """
   def delete_community(%User{} = user, community_id) do
-    with {:ok, _} <- authorize(user, community_id, :delete_community) do
-      Repo.delete_all(from c in Community, where: c.id == ^community_id)
-      :ok
+    with {:ok, membership} <- authorize(user, community_id, :delete_community) do
+      rooms = voice_rooms(membership.community_id)
+      Repo.delete_all(from c in Community, where: c.id == ^membership.community_id)
+      Events.broadcast(membership.community_id, "community_deleted", %{})
+      {:ok, %{voice_rooms: rooms}}
     end
   end
 
@@ -84,8 +96,16 @@ defmodule Nosilence.Communities do
     end
   end
 
+  @doc """
+  Removes a member (not the owner). Their live connections are closed through a
+  `member_removed` event; the voice room ids are returned so callers can also
+  remove them from voice.
+  """
   def remove_member(%User{} = owner, community_id, member_user_id) do
-    with {:ok, _} <- authorize(owner, community_id, :remove_member) do
+    with {:ok, membership} <- authorize(owner, community_id, :remove_member),
+         {:ok, member_user_id} <- Ecto.UUID.cast(member_user_id) do
+      community_id = membership.community_id
+
       {count, _} =
         Repo.delete_all(
           from m in Membership,
@@ -94,7 +114,15 @@ defmodule Nosilence.Communities do
                 m.role != "owner"
         )
 
-      if count == 1, do: :ok, else: {:error, :not_found}
+      if count == 1 do
+        Events.broadcast(community_id, "member_removed", %{user_id: member_user_id})
+        {:ok, %{voice_rooms: voice_rooms(community_id)}}
+      else
+        {:error, :not_found}
+      end
+    else
+      :error -> {:error, :not_found}
+      error -> error
     end
   end
 
@@ -102,6 +130,7 @@ defmodule Nosilence.Communities do
   def leave_community(%User{} = user, community_id) do
     with {:ok, membership} <- authorize(user, community_id, :leave) do
       Repo.delete!(membership)
+      Events.broadcast(membership.community_id, "member_removed", %{user_id: user.id})
       :ok
     end
   end
@@ -111,20 +140,25 @@ defmodule Nosilence.Communities do
   def create_channel(%User{} = user, community_id, attrs) do
     with {:ok, _} <- authorize(user, community_id, :create_channel) do
       %Channel{community_id: community_id}
-      |> Channel.changeset(Map.take(attrs, ["name", "capacity"]))
+      |> Channel.changeset(Map.take(attrs, ["name", "kind", "capacity"]))
       |> Repo.insert()
     end
   end
 
   @doc "A voice channel the user may join, or `{:error, :not_found}`."
   def get_channel_for_voice(%User{} = user, channel_id) do
-    with {:ok, _} <- Ecto.UUID.cast(channel_id),
-         %Channel{} = channel <- Repo.get(Channel, channel_id),
-         {:ok, _} <- authorize(user, channel.community_id, :join_voice) do
-      {:ok, channel}
-    else
+    case authorize_channel(user, channel_id, :join_voice) do
+      {:ok, %Channel{kind: "voice"} = channel, _} -> {:ok, channel}
       _ -> {:error, :not_found}
     end
+  end
+
+  defp voice_rooms(community_id) do
+    Repo.all(
+      from ch in Channel,
+        where: ch.community_id == ^community_id and ch.kind == "voice",
+        select: ch.id
+    )
   end
 
   ## Invites
@@ -244,12 +278,30 @@ defmodule Nosilence.Communities do
 
   ## Authorisation
 
-  defp authorize(%User{id: user_id}, community_id, action) do
+  @doc """
+  The user's membership if they may perform `action` in the community.
+  `{:error, :not_found}` for non-members, `{:error, :forbidden}` for members
+  whose role does not allow it. Other contexts use this instead of reading
+  memberships themselves.
+  """
+  def authorize(%User{id: user_id}, community_id, action) do
     with {:ok, community_id} <- Ecto.UUID.cast(community_id),
          %Membership{} = membership <-
            Repo.get_by(Membership, community_id: community_id, user_id: user_id) do
       if Policy.can?(membership, action), do: {:ok, membership}, else: {:error, :forbidden}
     else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  @doc "Like `authorize/3`, for the community that owns a channel."
+  def authorize_channel(%User{} = user, channel_id, action) do
+    with {:ok, _} <- Ecto.UUID.cast(channel_id),
+         %Channel{} = channel <- Repo.get(Channel, channel_id),
+         {:ok, membership} <- authorize(user, channel.community_id, action) do
+      {:ok, channel, membership}
+    else
+      {:error, :forbidden} -> {:error, :forbidden}
       _ -> {:error, :not_found}
     end
   end

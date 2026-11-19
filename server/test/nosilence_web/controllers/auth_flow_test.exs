@@ -56,7 +56,7 @@ defmodule NosilenceWeb.AuthFlowTest do
 
     shown = build_conn() |> with_session(signed_in) |> get(~p"/api/communities/#{community_id}")
 
-    assert %{"channels" => [%{"id" => channel_id, "name" => "General"}]} =
+    assert %{"channels" => [%{"id" => channel_id, "name" => "General"}, %{"kind" => "text"}]} =
              json_response(shown, 200)
 
     Nosilence.LiveKitStub.room_with([])

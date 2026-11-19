@@ -28,3 +28,4 @@ What becomes easier, what becomes harder, what we must do next.
 | [0003](0003-accounts-and-sessions.md) | Accounts and sessions |
 | [0004](0004-sign-in-with-google.md) | Sign in with Google |
 | [0005](0005-communities-and-permissions.md) | Communities, invites and voice channel capacity |
+| [0006](0006-presence-and-text-channels.md) | Real-time gateway, presence and text channels |

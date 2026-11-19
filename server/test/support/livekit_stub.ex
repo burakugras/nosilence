@@ -3,7 +3,7 @@ defmodule Nosilence.LiveKitStub do
   @moduledoc "Fakes LiveKit's RoomService for tests (Req.Test)."
 
   @doc """
-  Answers CreateRoom and ListParticipants. `identities` are the participants
+  Answers CreateRoom, ListParticipants, RemoveParticipant and DeleteRoom. `identities` are the participants
   already in the room. Every request is sent to the test process as
   `{:livekit, method, body, authorization}`.
   """
@@ -22,6 +22,9 @@ defmodule Nosilence.LiveKitStub do
 
         "ListParticipants" ->
           Req.Test.json(conn, %{"participants" => Enum.map(identities, &%{"identity" => &1})})
+
+        method when method in ["RemoveParticipant", "DeleteRoom"] ->
+          Req.Test.json(conn, %{})
       end
     end)
   end

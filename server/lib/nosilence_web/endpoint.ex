@@ -11,9 +11,12 @@ defmodule NosilenceWeb.Endpoint do
     same_site: "Lax"
   ]
 
-  # socket "/live", Phoenix.LiveView.Socket,
-  #   websocket: [connect_info: [session: @session_options]],
-  #   longpoll: [connect_info: [session: @session_options]]
+  # Real-time gateway. The ticket travels in the WebSocket handshake header
+  # (`auth_token`); the Origin must be our own web app.
+  socket "/socket", NosilenceWeb.Gateway.Socket,
+    auth_token: true,
+    websocket: [check_origin: {NosilenceWeb.Endpoint, :allowed_origin?, []}],
+    longpoll: false
 
   # Serve at "/" the static files from "priv/static" directory.
   #
@@ -46,4 +49,10 @@ defmodule NosilenceWeb.Endpoint do
   plug Plug.Head
   plug Plug.Session, @session_options
   plug NosilenceWeb.Router
+
+  @doc "Only the web app's own origin may open the gateway connection."
+  def allowed_origin?(%URI{} = origin) do
+    app = URI.parse(Application.fetch_env!(:nosilence, :app_url))
+    origin.scheme == app.scheme and origin.host == app.host and origin.port == app.port
+  end
 end

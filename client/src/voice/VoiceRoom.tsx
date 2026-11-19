@@ -23,10 +23,12 @@ type Props = {
   join: VoiceJoin
   /** Shown as the heading, e.g. "Community · Channel". */
   title: string
+  /** Connected to the room (used to show the user in the channel for others). */
+  onConnected?: () => void
   onLeave: () => void
 }
 
-export function VoiceRoom({ join, title, onLeave }: Props) {
+export function VoiceRoom({ join, title, onConnected, onLeave }: Props) {
   return (
     <LiveKitRoom
       serverUrl={join.url}
@@ -34,6 +36,7 @@ export function VoiceRoom({ join, title, onLeave }: Props) {
       connect
       audio={{ echoCancellation: true, noiseSuppression: true, autoGainControl: true }}
       video={false}
+      onConnected={onConnected}
       onDisconnected={onLeave}
       className="voice-room"
     >

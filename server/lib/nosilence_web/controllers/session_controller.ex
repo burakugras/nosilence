@@ -26,6 +26,8 @@ defmodule NosilenceWeb.SessionController do
 
   def delete(conn, _params) do
     if token = conn.assigns.session_token, do: Accounts.delete_session(token)
+    # Close live connections too; the user's other devices reconnect with their own session.
+    if user = conn.assigns.current_user, do: NosilenceWeb.Gateway.Socket.disconnect_user(user.id)
     conn |> UserAuth.delete_session_cookie() |> send_resp(:no_content, "")
   end
 

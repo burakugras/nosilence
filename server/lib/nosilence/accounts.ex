@@ -96,6 +96,14 @@ defmodule Nosilence.Accounts do
 
   def get_user_by_session(_), do: nil
 
+  @doc "The user with this id, or nil."
+  def get_user(id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, id} -> Repo.get(User, id)
+      :error -> nil
+    end
+  end
+
   def delete_session(token) when is_binary(token) do
     Repo.delete_all(UserToken.by_token_query(token, "session"))
     :ok

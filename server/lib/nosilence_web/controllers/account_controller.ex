@@ -46,7 +46,9 @@ defmodule NosilenceWeb.AccountController do
   def reset_password(conn, %{"token" => token, "password" => password})
       when is_binary(token) and is_binary(password) do
     case Accounts.reset_password(token, %{"password" => password}) do
-      {:ok, _user} ->
+      {:ok, user} ->
+        # Every session was signed out; close their live connections as well.
+        NosilenceWeb.Gateway.Socket.disconnect_user(user.id)
         json(conn, %{status: "password changed"})
 
       {:error, :invalid_token} ->

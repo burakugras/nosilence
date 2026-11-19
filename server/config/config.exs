@@ -44,8 +44,12 @@ config :nosilence, Nosilence.Communities,
   default_channel_capacity: 8,
   max_channel_capacity: 8
 
-# Never write secrets to the logs: these request parameters show as [FILTERED].
-config :phoenix, :filter_parameters, ["password", "token", "secret", "code", "state"]
+# Text messages (limits are configuration, see docs/ROADMAP.md rule 6).
+config :nosilence, Nosilence.Messaging, max_message_length: 2000, page_size: 50
+
+# Never write secrets or message content to the logs: these request parameters
+# show as [FILTERED].
+config :phoenix, :filter_parameters, ["password", "token", "secret", "code", "state", "text"]
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

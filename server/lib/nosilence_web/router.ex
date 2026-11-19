@@ -64,6 +64,12 @@ defmodule NosilenceWeb.Router do
     post "/invites/accept", InviteController, :accept
 
     post "/channels/:channel_id/voice-token", VoiceController, :token
+
+    get "/channels/:channel_id/messages", MessageController, :index
+    post "/channels/:channel_id/messages", MessageController, :create
+    delete "/messages/:id", MessageController, :delete
+
+    post "/socket-token", SocketController, :create
   end
 
   # Enable Swoosh mailbox preview in development

@@ -209,3 +209,72 @@ body {
   font: inherit;
   padding: 0.4rem;
 }
+
+/* Presence */
+.dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  border: 1px solid var(--text-muted);
+}
+
+.dot.online {
+  background: #2e9d57;
+  border-color: #2e9d57;
+}
+
+.voice-members {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+[aria-current='true'] {
+  font-weight: 600;
+}
+
+/* Text channel */
+.text-channel {
+  margin: 1rem 0;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 30%, transparent);
+  border-radius: 8px;
+}
+
+.messages {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+  max-height: 24rem;
+  overflow-y: auto;
+}
+
+.messages li {
+  padding: 0.35rem 0;
+}
+
+.message-head {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.9em;
+}
+
+.message-text {
+  margin: 0.1rem 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.composer {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.composer textarea {
+  flex: 1;
+  font: inherit;
+  padding: 0.5rem;
+  resize: vertical;
+}

@@ -13,6 +13,8 @@ Sizes: **S** small, **M** medium, **L** large. No dates: a phase is done when it
 5. **Small changes.** One feature per branch and pull request, reviewed before merge.
 6. **Limits are configuration.** Room capacity, minimum age and retention periods are never hard-coded.
 7. **Clean-up at the end of each phase.** Short refactoring pass before moving on.
+8. **Nothing deferred is forgotten.** Anything we postpone goes into [Deferred](#deferred)
+   with a target. At the start of each phase we review the list and raise what is due.
 
 ## Phases
 
@@ -69,3 +71,25 @@ Server hosting, HTTPS, TURN, backups, legal texts with legal review, in-app
 
 ## After the MVP
 End-to-end encrypted text messages, video and screen sharing, richer roles, mobile apps.
+
+## Deferred
+
+Postponed on purpose. Reviewed at the start of every phase.
+
+| Item | Decided in | Target |
+| --- | --- | --- |
+| Rate limiting for sign-in and email endpoints | Phase 2 | Phase 7 |
+| Scheduled cleanup of expired sessions and email tokens | Phase 2 | Phase 7 |
+| Transferring community ownership | Phase 3 | Before Phase 8 |
+| Moderator role | Phase 3 | Before Phase 8 |
+| Renaming and deleting channels | Phase 3 | Before Phase 8 |
+| Editing messages | Phase 4 | Before Phase 8 |
+| Rate limiting for sending messages | Phase 4 | Phase 7 |
+| Allowing the desktop app's origin on the gateway | Phase 4 | Phase 6 |
+| LiveKit webhooks as a second source for voice presence | Phase 4 | Phase 7 |
+| Disk encryption for the database and backups | Phase 4 | Phase 8 |
+| Legal review of retention periods (traffic logs 1 year, metadata 30 days) | Phase 0 | Phase 8 |
+| Hosting choice (VPS) | Phase 0 | Phase 8 |
+| Contributor licence agreement before accepting outside contributions | Phase 0 | First outside contribution |
+| Whether to move to `AGPL-3.0-or-later` | Phase 0 | When a new AGPL version is published |
+| End-to-end encrypted text messages | Phase 0 | After the MVP |
