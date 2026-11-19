@@ -47,7 +47,23 @@ defmodule NosilenceWeb.Router do
     pipe_through [:api, :authenticated]
 
     get "/me", SessionController, :show
-    post "/voice/token", VoiceController, :token
+
+    get "/communities", CommunityController, :index
+    post "/communities", CommunityController, :create
+    get "/communities/:id", CommunityController, :show
+    delete "/communities/:id", CommunityController, :delete
+    get "/communities/:id/members", CommunityController, :members
+    delete "/communities/:id/members/:user_id", CommunityController, :remove_member
+    delete "/communities/:id/membership", CommunityController, :leave
+    post "/communities/:id/channels", CommunityController, :create_channel
+
+    get "/communities/:id/invites", InviteController, :index
+    post "/communities/:id/invites", InviteController, :create
+    delete "/invites/:invite_id", InviteController, :revoke
+    post "/invites/preview", InviteController, :preview
+    post "/invites/accept", InviteController, :accept
+
+    post "/channels/:channel_id/voice-token", VoiceController, :token
   end
 
   # Enable Swoosh mailbox preview in development

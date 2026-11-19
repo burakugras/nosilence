@@ -1,60 +1,57 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 defmodule Nosilence.Voice do
   @moduledoc """
-  Voice context: everything about joining voice rooms.
+  Voice context: joining the voice room of a channel.
 
-  Other parts of the app talk to voice only through the functions in this module.
-  Media itself never passes through this server; it flows through LiveKit.
+  Media never passes through this server; it flows through LiveKit. Room
+  capacity is enforced twice: here, for a clear "room is full" answer, and by
+  LiveKit's own `max_participants`, which also covers two people joining at
+  the same moment.
   """
-
-  alias Nosilence.Voice.AccessToken
 
   alias Nosilence.Accounts.User
+  alias Nosilence.Communities
+  alias Nosilence.Voice.{AccessToken, LiveKitAPI}
 
-  @room_pattern ~r/\A[a-z0-9][a-z0-9-]{0,31}\z/
-
-  @type join :: %{
-          token: String.t(),
-          url: String.t(),
-          room: String.t(),
-          identity: String.t()
-        }
+  @type join :: %{token: String.t(), url: String.t(), room: String.t(), identity: String.t()}
 
   @doc """
-  Validates the room and returns what a signed-in user needs to join it.
-
-  The LiveKit identity is the user id and the name is the display name, both
-  taken from the account (already validated at sign-up), never from the request.
-  Room capacity is enforced by LiveKit (`room.max_participants`); from phase 3
-  the backend checks it too before issuing a token.
+  Token for the voice room of `channel_id`. The user must be a member of the
+  channel's community. The LiveKit room is named after the channel id, so
+  channels never share a room; identity and name come from the account.
   """
-  @spec join_room(term(), User.t()) :: {:ok, join()} | {:error, %{atom() => String.t()}}
-  def join_room(room, %User{} = user) do
-    with {:ok, room} <- validate_room(room) do
-      config = config()
-
-      token =
-        AccessToken.sign(
-          api_key: Keyword.fetch!(config, :api_key),
-          api_secret: Keyword.fetch!(config, :api_secret),
-          identity: user.id,
-          name: user.display_name,
-          grant: %{room: room},
-          ttl_seconds: Keyword.get(config, :token_ttl_seconds, 600)
-        )
-
-      {:ok,
-       %{token: token, url: Keyword.fetch!(config, :livekit_url), room: room, identity: user.id}}
+  @spec join_channel(User.t(), term()) ::
+          {:ok, join()} | {:error, :not_found | :room_full | :voice_unavailable}
+  def join_channel(%User{} = user, channel_id) do
+    with {:ok, channel} <- Communities.get_channel_for_voice(user, channel_id),
+         room = channel.id,
+         :ok <- LiveKitAPI.ensure_room(room, channel.capacity),
+         {:ok, identities} <- LiveKitAPI.participant_identities(room),
+         :ok <- check_capacity(identities, user.id, channel.capacity) do
+      {:ok, issue(user, room)}
     end
   end
 
-  defp validate_room(room) when is_binary(room) do
-    if Regex.match?(@room_pattern, room),
-      do: {:ok, room},
-      else: {:error, %{room: "use 1-32 lowercase letters, digits or dashes"}}
+  # Rejoining (a second tab, a reconnect) replaces the old connection in LiveKit,
+  # so the user's own identity does not count against the limit.
+  defp check_capacity(identities, user_id, capacity) do
+    others = identities |> Enum.uniq() |> Enum.reject(&(&1 == user_id)) |> length()
+    if others < capacity, do: :ok, else: {:error, :room_full}
   end
 
-  defp validate_room(_), do: {:error, %{room: "is required"}}
+  defp issue(user, room) do
+    config = Application.fetch_env!(:nosilence, __MODULE__)
 
-  defp config, do: Application.fetch_env!(:nosilence, __MODULE__)
+    token =
+      AccessToken.sign(
+        api_key: Keyword.fetch!(config, :api_key),
+        api_secret: Keyword.fetch!(config, :api_secret),
+        identity: user.id,
+        name: user.display_name,
+        grant: %{room: room},
+        ttl_seconds: Keyword.get(config, :token_ttl_seconds, 600)
+      )
+
+    %{token: token, url: Keyword.fetch!(config, :livekit_url), room: room, identity: user.id}
+  end
 end

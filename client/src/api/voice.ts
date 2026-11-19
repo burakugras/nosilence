@@ -8,6 +8,9 @@ export type VoiceJoin = {
   identity: string
 }
 
-/** LiveKit token for a room. Needs a session; the name comes from the account. */
-export const requestVoiceJoin = (room: string, fetchFn?: typeof fetch) =>
-  request<VoiceJoin>('/api/voice/token', { method: 'POST', body: { room }, fetchFn })
+/**
+ * LiveKit token for a channel's voice room. Members only; answers 409 when the
+ * channel is full and 503 when voice is unavailable.
+ */
+export const requestChannelJoin = (channelId: string) =>
+  request<VoiceJoin>(`/api/channels/${channelId}/voice-token`, { method: 'POST' })

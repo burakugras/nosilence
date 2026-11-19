@@ -166,3 +166,46 @@ body {
   color: inherit;
   text-decoration: none;
 }
+
+.plain-list {
+  list-style: none;
+  padding: 0;
+}
+
+.plain-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--text-muted) 25%, transparent);
+}
+
+.badge {
+  margin-left: 0.5rem;
+  padding: 0 0.4rem;
+  border-radius: 4px;
+  font-size: 0.8em;
+  border: 1px solid var(--text-muted);
+  color: var(--text-muted);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.danger {
+  font: inherit;
+  padding: 0.5rem 0.75rem;
+  color: #c62828;
+}
+
+.invite-link input {
+  width: 100%;
+  font: inherit;
+}
+
+.stack-form select {
+  font: inherit;
+  padding: 0.4rem;
+}

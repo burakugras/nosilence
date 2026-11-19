@@ -4,14 +4,11 @@ defmodule NosilenceWeb.VoiceController do
 
   alias Nosilence.Voice
 
-  @doc "Token for a voice room. Signed-in users only; rooms open to all until phase 3."
-  def token(conn, params) do
-    case Voice.join_room(params["room"], conn.assigns.current_user) do
-      {:ok, join} ->
-        json(conn, join)
+  action_fallback NosilenceWeb.FallbackController
 
-      {:error, errors} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{errors: errors})
-    end
+  @doc "Token for a channel's voice room. Members of the channel's community only."
+  def token(conn, %{"channel_id" => channel_id}) do
+    with {:ok, join} <- Voice.join_channel(conn.assigns.current_user, channel_id),
+         do: json(conn, join)
   end
 end

@@ -1,25 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { CompleteSignupPage } from './accounts/CompleteSignupPage'
 import { ConfirmPage } from './accounts/ConfirmPage'
 import { LoginPage } from './accounts/LoginPage'
 import { ForgotPasswordPage, ResetPasswordPage } from './accounts/PasswordResetPages'
 import { RegisterPage } from './accounts/RegisterPage'
 import { currentUser, signOut, type User } from './api/accounts'
-import { ApiError } from './api/http'
-import { requestVoiceJoin, type VoiceJoin } from './api/voice'
+import { CommunitiesPage } from './communities/CommunitiesPage'
+import { CommunityPage } from './communities/CommunityPage'
+import { InvitePage } from './communities/InvitePage'
 import { navigate, useLocation } from './router'
-import { JoinForm } from './voice/JoinForm'
-
-// LiveKit is large; load it only when the user joins a room so the first page stays fast.
-const VoiceRoom = lazy(() => import('./voice/VoiceRoom').then((m) => ({ default: m.VoiceRoom })))
 
 type Props = {
   loadUser?: () => Promise<User | null>
-  join?: typeof requestVoiceJoin
 }
 
-export default function App({ loadUser = currentUser, join = requestVoiceJoin }: Props) {
+const COMMUNITY_PATH = /^\/c\/([0-9a-f-]{36})$/
+
+export default function App({ loadUser = currentUser }: Props) {
   // undefined while loading, null when signed out
   const [user, setUser] = useState<User | null>()
   const { path, params } = useLocation()
@@ -54,7 +52,8 @@ export default function App({ loadUser = currentUser, join = requestVoiceJoin }:
   if (user === null) {
     const onSignedIn = (signedIn: User) => {
       setUser(signedIn)
-      navigate('/', { replace: true })
+      // An invite link opened while signed out continues after signing in.
+      if (path !== '/invite') navigate('/', { replace: true })
     }
     const page =
       path === '/complete-signup' ? (
@@ -64,10 +63,23 @@ export default function App({ loadUser = currentUser, join = requestVoiceJoin }:
       ) : path === '/forgot-password' ? (
         <ForgotPasswordPage />
       ) : (
-        <LoginPage onSignedIn={onSignedIn} googleError={params.get('error')} />
+        <>
+          {path === '/invite' && <p>Sign in to accept your invite.</p>}
+          <LoginPage onSignedIn={onSignedIn} googleError={params.get('error')} />
+        </>
       )
     return <Shell>{page}</Shell>
   }
+
+  const community = COMMUNITY_PATH.exec(path)
+  const page =
+    path === '/invite' ? (
+      <InvitePage token={params.get('token')} />
+    ) : community ? (
+      <CommunityPage key={community[1]} communityId={community[1]} />
+    ) : (
+      <CommunitiesPage />
+    )
 
   return (
     <Shell
@@ -78,7 +90,7 @@ export default function App({ loadUser = currentUser, join = requestVoiceJoin }:
         navigate('/login', { replace: true })
       }}
     >
-      <Home user={user} join={join} />
+      {page}
     </Shell>
   )
 }
@@ -107,45 +119,5 @@ function Shell({
       </header>
       {children}
     </main>
-  )
-}
-
-function Home({ user, join }: { user: User; join: typeof requestVoiceJoin }) {
-  const [session, setSession] = useState<VoiceJoin>()
-  const [busy, setBusy] = useState(false)
-  const [roomError, setRoomError] = useState<string>()
-  const [message, setMessage] = useState<string>()
-
-  async function handleJoin(room: string) {
-    setBusy(true)
-    setRoomError(undefined)
-    setMessage(undefined)
-    try {
-      setSession(await join(room))
-    } catch (error) {
-      if (error instanceof ApiError) {
-        setRoomError(error.field('room'))
-        setMessage(error.message)
-      } else {
-        setMessage('Something went wrong.')
-      }
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (session) {
-    return (
-      <Suspense fallback={<p>Connecting…</p>}>
-        <VoiceRoom join={session} onLeave={() => setSession(undefined)} />
-      </Suspense>
-    )
-  }
-
-  return (
-    <section>
-      <p>Signed in as {user.email}. Pick a room to talk in.</p>
-      <JoinForm onJoin={handleJoin} busy={busy} serverError={roomError} message={message} />
-    </section>
   )
 }

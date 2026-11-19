@@ -13,9 +13,15 @@ defmodule Nosilence.Voice.AccessToken do
 
   @header %{"alg" => "HS256", "typ" => "JWT"}
 
-  @typedoc "Permissions inside one room (LiveKit `video` grant)."
+  @typedoc """
+  Permissions inside one room (LiveKit `video` grant). Participants get
+  `room_join`; the server's own API calls use `room_admin`/`room_create`.
+  """
   @type grant :: %{
           required(:room) => String.t(),
+          optional(:room_join) => boolean(),
+          optional(:room_admin) => boolean(),
+          optional(:room_create) => boolean(),
           optional(:can_publish) => boolean(),
           optional(:can_subscribe) => boolean(),
           optional(:can_publish_data) => boolean()
@@ -46,13 +52,7 @@ defmodule Nosilence.Voice.AccessToken do
         "sub" => Keyword.fetch!(opts, :identity),
         "nbf" => now,
         "exp" => now + ttl,
-        "video" => %{
-          "room" => Map.fetch!(grant, :room),
-          "roomJoin" => true,
-          "canPublish" => Map.get(grant, :can_publish, true),
-          "canSubscribe" => Map.get(grant, :can_subscribe, true),
-          "canPublishData" => Map.get(grant, :can_publish_data, true)
-        }
+        "video" => video_grant(grant)
       }
       |> maybe_put("name", Keyword.get(opts, :name))
 
@@ -72,6 +72,34 @@ defmodule Nosilence.Voice.AccessToken do
       _ ->
         false
     end
+  end
+
+  @grant_keys [
+    room_join: "roomJoin",
+    room_admin: "roomAdmin",
+    room_create: "roomCreate",
+    can_publish: "canPublish",
+    can_subscribe: "canSubscribe",
+    can_publish_data: "canPublishData"
+  ]
+
+  # Participant defaults: join, publish and subscribe. Admin grants are opt-in.
+  @participant_defaults %{
+    room_join: true,
+    can_publish: true,
+    can_subscribe: true,
+    can_publish_data: true
+  }
+
+  defp video_grant(grant) do
+    defaults = if grant[:room_admin] || grant[:room_create], do: %{}, else: @participant_defaults
+
+    Enum.reduce(@grant_keys, %{"room" => Map.fetch!(grant, :room)}, fn {key, json}, acc ->
+      case Map.get(grant, key, Map.get(defaults, key)) do
+        nil -> acc
+        value -> Map.put(acc, json, value)
+      end
+    end)
   end
 
   defp encode(map), do: map |> Jason.encode!() |> base64url()
