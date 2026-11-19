@@ -56,7 +56,14 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
   useEffect(
     () =>
       subscribe((event) => {
-        if (event.type === 'member_removed') setMembersKey((k) => k + 1)
+        if (event.type === 'member_joined' || event.type === 'member_removed')
+          setMembersKey((k) => k + 1)
+        if (event.type === 'channel_created')
+          setData((d) =>
+            d && !d.channels.some((c) => c.id === event.channel.id)
+              ? { ...d, channels: [...d.channels, event.channel] }
+              : d,
+          )
       }),
     [subscribe],
   )

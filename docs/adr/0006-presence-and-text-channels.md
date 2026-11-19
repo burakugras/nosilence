@@ -41,6 +41,10 @@ History pages of 50, newest first on the wire, oldest first on screen; at most 2
 characters, no control or bidirectional-override characters. Messages are kept until
 deleted or until the community is deleted.
 
+**Changes are live.** New members, new channels, new and deleted messages reach every
+connected member as events (`member_joined`, `channel_created`, `message_created`,
+`message_deleted`, `member_removed`); no page reload is needed.
+
 **Losing access takes effect at once.** Removing a member or deleting a community pushes
 `removed` and closes that topic for them, and removes them from LiveKit rooms. Signing out
 or resetting a password closes all of the user's live connections.

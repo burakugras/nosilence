@@ -10,6 +10,7 @@ import { CommunityPage } from './CommunityPage'
 
 // Plain functions instead of vi.fn for anything that may reject (see RegisterPage.test.tsx).
 let role: 'owner' | 'member' = 'owner'
+const extraMembers: { user_id: string; display_name: string; role: 'member' }[] = []
 vi.mock('../api/communities', () => ({
   getCommunity: () =>
     Promise.resolve({
@@ -23,6 +24,7 @@ vi.mock('../api/communities', () => ({
     Promise.resolve([
       { user_id: 'u1', display_name: 'Burak', role: 'owner' },
       { user_id: 'u2', display_name: 'Ayşe', role: 'member' },
+      ...extraMembers,
     ]),
   listInvites: () => Promise.resolve([]),
 }))
@@ -69,6 +71,7 @@ describe('CommunityPage', () => {
   beforeEach(() => {
     role = 'owner'
     sent.length = 0
+    extraMembers.length = 0
   })
 
   it('owners see channel, invite and delete controls', async () => {
@@ -138,6 +141,24 @@ describe('CommunityPage', () => {
     fireEvent.keyDown(box, { key: 'Enter' })
     expect(await screen.findByText('selam')).toBeInTheDocument()
     expect(sent).toEqual(['selam'])
+  })
+
+  it('new members and channels appear without a reload', async () => {
+    const { state } = renderPage()
+    const members = await screen.findByRole('list', { name: 'Members' })
+    await within(members).findByText('Ayşe')
+
+    extraMembers.push({ user_id: 'u3', display_name: 'Cem', role: 'member' })
+    act(() => state.listener!.event({ type: 'member_joined', user_id: 'u3', display_name: 'Cem' }))
+    expect(await within(members).findByText('Cem')).toBeInTheDocument()
+
+    act(() =>
+      state.listener!.event({
+        type: 'channel_created',
+        channel: { id: 't2', name: 'duyurular', kind: 'text', capacity: null },
+      }),
+    )
+    expect(screen.getByRole('button', { name: '#duyurular' })).toBeInTheDocument()
   })
 
   it('a removed member sees "Community not found" at once', async () => {

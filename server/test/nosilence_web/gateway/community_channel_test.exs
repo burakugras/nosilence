@@ -113,6 +113,27 @@ defmodule NosilenceWeb.Gateway.CommunityChannelTest do
     assert_push "message_created", %{id: ^message_id, text: "hello"}
   end
 
+  test "new members and new channels are pushed to members", ctx do
+    join_community(ctx.owner, ctx.community)
+    newcomer = confirmed_user_fixture(%{"display_name" => "Newcomer"})
+    :ok = join_fixture(ctx.owner, ctx.community, newcomer)
+    newcomer_id = newcomer.id
+    assert_push "member_joined", %{user_id: ^newcomer_id, display_name: "Newcomer"}
+
+    # Accepting again as a member is not a new join.
+    {:ok, token, _} = Communities.create_invite(ctx.owner, ctx.community.id)
+    {:ok, _} = Communities.accept_invite(newcomer, token)
+    refute_push "member_joined", _
+
+    {:ok, _} =
+      Communities.create_channel(ctx.owner, ctx.community.id, %{
+        "name" => "news",
+        "kind" => "text"
+      })
+
+    assert_push "channel_created", %{name: "news", kind: "text", capacity: nil}
+  end
+
   test "a removed member is disconnected at once; others are told", ctx do
     owner_socket = join_community(ctx.owner, ctx.community)
     member_socket = join_community(ctx.member, ctx.community)

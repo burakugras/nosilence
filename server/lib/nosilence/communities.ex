@@ -142,6 +142,18 @@ defmodule Nosilence.Communities do
       %Channel{community_id: community_id}
       |> Channel.changeset(Map.take(attrs, ["name", "kind", "capacity"]))
       |> Repo.insert()
+      |> tap(fn
+        {:ok, ch} ->
+          Events.broadcast(ch.community_id, "channel_created", %{
+            id: ch.id,
+            name: ch.name,
+            kind: ch.kind,
+            capacity: ch.capacity
+          })
+
+        _ ->
+          :ok
+      end)
     end
   end
 
@@ -250,8 +262,16 @@ defmodule Nosilence.Communities do
     )
     |> Repo.transaction()
     |> case do
-      {:ok, _} -> {:ok, Repo.get!(Community, invite.community_id)}
-      {:error, :check, reason, _} -> {:error, reason}
+      {:ok, _} ->
+        Events.broadcast(invite.community_id, "member_joined", %{
+          user_id: user.id,
+          display_name: user.display_name
+        })
+
+        {:ok, Repo.get!(Community, invite.community_id)}
+
+      {:error, :check, reason, _} ->
+        {:error, reason}
     end
   end
 

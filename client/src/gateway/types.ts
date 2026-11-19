@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { Channel } from '../api/communities'
 import type { Message } from '../api/messages'
 
 /** Someone connected to the community right now. */
@@ -12,7 +13,9 @@ export type OnlineMember = {
 export type LiveEvent =
   | { type: 'message_created'; message: Message }
   | { type: 'message_deleted'; id: string; channel_id: string }
+  | { type: 'member_joined'; user_id: string; display_name: string }
   | { type: 'member_removed'; user_id: string }
+  | { type: 'channel_created'; channel: Channel }
 
 export type CommunityListener = {
   presence: (members: OnlineMember[]) => void
