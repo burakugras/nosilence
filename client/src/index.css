@@ -36,19 +36,19 @@ body {
   color: var(--text-muted);
 }
 
-.join-form {
+.stack-form {
   display: grid;
   gap: 0.5rem;
   max-width: 20rem;
 }
 
-.join-form label {
+.stack-form label {
   display: grid;
   gap: 0.25rem;
 }
 
-.join-form input,
-.join-form button,
+.stack-form input,
+.stack-form button,
 .controls button {
   font: inherit;
   padding: 0.5rem 0.75rem;
@@ -124,4 +124,36 @@ body {
 .stats-table td {
   padding: 0.25rem 0.75rem 0.25rem 0;
   text-align: left;
+}
+
+.stack-form .checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stack-form .checkbox input {
+  width: auto;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.form-info {
+  margin: 0;
+  color: var(--text-muted);
 }

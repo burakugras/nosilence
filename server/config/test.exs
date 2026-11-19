@@ -22,7 +22,10 @@ config :nosilence, NosilenceWeb.Endpoint,
   secret_key_base: "5aSxfr9O9TBMX7Eo3pewtwsYkLXwbHW9ebNNlCxj235Q3lHmRI7k+g00593wJReR",
   server: false
 
-config :nosilence, dev_voice_tokens: true
+config :nosilence, app_url: "http://app.test", secure_cookies: false
+
+# Cheap password hashing keeps the test suite fast. Never use these values elsewhere.
+config :argon2_elixir, t_cost: 1, m_cost: 8
 
 # Fixed test values; tests never talk to a real LiveKit server.
 config :nosilence, Nosilence.Voice,

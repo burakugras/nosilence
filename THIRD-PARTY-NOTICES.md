@@ -8,23 +8,26 @@ source; full license texts will be bundled with distributed builds (web and desk
 Keep this file up to date: every new dependency is checked for license compatibility
 and added here in the same change.
 
-Last reviewed: 2026-11-17 (Phase 1).
+Last reviewed: 2026-11-19 (Phase 2a). CI runs `mix hex.audit` and `npm audit` on every push.
 
 ## Server (Elixir, `server/mix.lock`)
 
 | Package | Version | License |
 |---|---|---|
+| argon2_elixir | 4.1.3 | Apache-2.0 (bundles the Argon2 reference C code, CC0-1.0 OR Apache-2.0) |
 | bandit | 1.15.0 | MIT |
+| comeonin | 5.5.1 | BSD-3-Clause |
 | db_connection | 2.10.2 | Apache-2.0 |
 | decimal | 3.2.0 | Apache-2.0 |
 | dns_cluster | 0.2.0 | MIT |
 | ecto | 3.14.3 | Apache-2.0 |
 | ecto_sql | 3.14.0 | Apache-2.0 |
+| elixir_make | 0.10.1 | Apache-2.0 (build tool only) |
 | expo | 1.1.1 | Apache-2.0 |
 | finch | 0.24.0 | MIT |
 | gettext | 1.0.2 | Apache-2.0 |
 | hpax | 1.1.0 | Apache-2.0 |
-| idna | 7.1.0 | MIT |
+| idna | 8.0.0 | MIT |
 | jason | 1.4.5 | Apache-2.0 |
 | mime | 2.0.7 | Apache-2.0 |
 | mint | 1.11.0 | Apache-2.0 |
@@ -34,11 +37,11 @@ Last reviewed: 2026-11-17 (Phase 1).
 | phoenix_ecto | 4.7.0 | MIT |
 | phoenix_pubsub | 2.4.1 | MIT |
 | phoenix_template | 1.1.0 | MIT |
-| plug | 1.20.3 | Apache-2.0 |
+| plug | 1.20.4 | Apache-2.0 |
 | plug_crypto | 2.2.1 | Apache-2.0 |
 | postgrex | 0.22.4 | Apache-2.0 |
 | req | 0.7.5 | Apache-2.0 |
-| swoosh | 1.29.3 | MIT |
+| swoosh | 1.30.0 | MIT |
 | telemetry | 1.4.3 | Apache-2.0 |
 | telemetry_metrics | 1.2.0 | Apache-2.0 |
 | telemetry_poller | 1.3.0 | Apache-2.0 |
