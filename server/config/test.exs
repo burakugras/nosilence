@@ -24,6 +24,12 @@ config :nosilence, NosilenceWeb.Endpoint,
 
 config :nosilence, app_url: "http://app.test", secure_cookies: false
 
+# Tests stub Google's token endpoint with Req.Test; nothing leaves the machine.
+config :nosilence, Nosilence.Accounts.Google,
+  client_id: "test-client-id.apps.googleusercontent.com",
+  client_secret: "test-client-secret",
+  req_options: [plug: {Req.Test, Nosilence.Accounts.Google}]
+
 # Cheap password hashing keeps the test suite fast. Never use these values elsewhere.
 config :argon2_elixir, t_cost: 1, m_cost: 8
 

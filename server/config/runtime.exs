@@ -61,6 +61,10 @@ if config_env() == :prod do
     app_url: System.fetch_env!("APP_URL"),
     secure_cookies: true
 
+  config :nosilence, Nosilence.Accounts.Google,
+    client_id: System.get_env("GOOGLE_CLIENT_ID"),
+    client_secret: System.get_env("GOOGLE_CLIENT_SECRET")
+
   config :nosilence, Nosilence.Voice,
     livekit_url: System.fetch_env!("LIVEKIT_URL"),
     api_key: System.fetch_env!("LIVEKIT_API_KEY"),

@@ -101,6 +101,38 @@ defmodule Nosilence.Accounts do
     :ok
   end
 
+  ## Google
+
+  @doc """
+  Signs in a verified Google identity:
+
+    * `{:ok, user}` when an account has this Google id, or has the same email
+      (the Google id is then linked to it);
+    * `{:new, identity}` when there is no account yet; the user must still
+      choose a display name and confirm being 18+ (`register_google_user/2`).
+  """
+  def sign_in_with_google(%{sub: sub, email: email} = identity) do
+    cond do
+      user = Repo.get_by(User, google_sub: sub) ->
+        {:ok, user}
+
+      user = get_user_by_email(email) ->
+        user |> User.link_google_changeset(sub) |> Repo.update()
+
+      true ->
+        {:new, identity}
+    end
+  end
+
+  def register_google_user(identity, attrs) do
+    %User{}
+    |> User.google_registration_changeset(
+      identity,
+      Map.take(attrs, ["display_name", "age_confirmed"])
+    )
+    |> Repo.insert()
+  end
+
   ## Password reset
 
   @doc "Emails a reset link if the account exists. Always returns `:ok`."

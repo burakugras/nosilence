@@ -4,9 +4,17 @@ import { resendConfirmation, signIn, type User } from '../api/accounts'
 import { Field, FormMessage } from '../components/Field'
 import { Link } from '../components/Link'
 import { collect, emailError } from '../validation'
+import { GoogleButton } from './GoogleButton'
+import { googleErrorMessage } from './googleErrors'
 import { useSubmit } from './useSubmit'
 
-export function LoginPage({ onSignedIn }: { onSignedIn: (user: User) => void }) {
+type Props = {
+  onSignedIn: (user: User) => void
+  /** ?error= code from a failed Google sign-in */
+  googleError?: string | null
+}
+
+export function LoginPage({ onSignedIn, googleError = null }: Props) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const { busy, errors, message, status, run } = useSubmit()
@@ -26,6 +34,8 @@ export function LoginPage({ onSignedIn }: { onSignedIn: (user: User) => void }) 
   return (
     <section>
       <h2>Sign in</h2>
+      <FormMessage text={googleErrorMessage(googleError)} />
+      <GoogleButton />
       <form className="stack-form" onSubmit={submit} noValidate>
         <Field
           label="Email"

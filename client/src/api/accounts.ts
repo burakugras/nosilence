@@ -43,3 +43,21 @@ export async function currentUser(fetchFn?: typeof fetch): Promise<User | null> 
     throw error
   }
 }
+
+/** Which sign-in providers the server has configured. */
+export const providers = () => request<{ google: boolean }>('/api/auth/providers')
+
+/** Full-page navigation: Google sign-in cannot run inside a fetch call. */
+export const GOOGLE_SIGN_IN_URL = '/api/auth/google'
+
+export type PendingGoogleSignup = { email: string; name: string | null }
+
+export const pendingGoogleSignup = () => request<PendingGoogleSignup>('/api/auth/google/signup')
+
+export const completeGoogleSignup = async (display_name: string, age_confirmed: boolean) =>
+  (
+    await request<{ user: User }>('/api/auth/google/signup', {
+      method: 'POST',
+      body: { display_name, age_confirmed },
+    })
+  ).user
