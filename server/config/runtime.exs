@@ -57,6 +57,10 @@ if config_env() == :prod do
 
   config :nosilence, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
+  config :nosilence,
+    app_url: System.fetch_env!("APP_URL"),
+    secure_cookies: true
+
   config :nosilence, Nosilence.Voice,
     livekit_url: System.fetch_env!("LIVEKIT_URL"),
     api_key: System.fetch_env!("LIVEKIT_API_KEY"),

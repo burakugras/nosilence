@@ -12,4 +12,14 @@ mix test
 mix precommit        # compile with warnings as errors, format, test
 ```
 
+Account emails (confirmation, password reset) land in the local mailbox at
+http://127.0.0.1:4000/dev/mailbox during development.
+
+On Windows, `argon2_elixir` contains C code. When it has to be compiled (first setup,
+new version, `mix deps.clean`), run the command inside the MSVC build environment:
+
+```powershell
+.\scripts\with-msvc.ps1 mix deps.compile
+```
+
 Agent guidance for this Phoenix project lives in `AGENTS.md`.

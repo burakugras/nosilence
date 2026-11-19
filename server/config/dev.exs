@@ -54,8 +54,8 @@ config :nosilence, NosilenceWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :nosilence, dev_routes: true
 
-# Phase 1: unauthenticated voice token endpoint (see NosilenceWeb.DevVoiceController)
-config :nosilence, dev_voice_tokens: true
+# Links in account emails point to the Vite dev server; cookies work over plain http.
+config :nosilence, app_url: "http://127.0.0.1:5173", secure_cookies: false
 
 # LiveKit runs in Docker (see infra/); keys are shared through infra/.env
 config :nosilence, Nosilence.Voice,
