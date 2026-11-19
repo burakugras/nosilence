@@ -39,6 +39,14 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# Voice channel limits. Capacity is per channel, between 2 and the maximum.
+config :nosilence, Nosilence.Communities,
+  default_channel_capacity: 8,
+  max_channel_capacity: 8
+
+# Never write secrets to the logs: these request parameters show as [FILTERED].
+config :phoenix, :filter_parameters, ["password", "token", "secret", "code", "state"]
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

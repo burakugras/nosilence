@@ -36,6 +36,8 @@ config :argon2_elixir, t_cost: 1, m_cost: 8
 # Fixed test values; tests never talk to a real LiveKit server.
 config :nosilence, Nosilence.Voice,
   livekit_url: "ws://livekit.test:7880",
+  api_url: "http://livekit.test:7880",
+  req_options: [plug: {Req.Test, Nosilence.Voice.LiveKitAPI}],
   api_key: "test-api-key",
   api_secret: "test-api-secret-that-is-at-least-32-bytes",
   token_ttl_seconds: 600

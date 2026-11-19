@@ -21,10 +21,12 @@ import { summariseInbound, type InboundAudioSample, type InboundAudioSummary } f
 
 type Props = {
   join: VoiceJoin
+  /** Shown as the heading, e.g. "Community · Channel". */
+  title: string
   onLeave: () => void
 }
 
-export function VoiceRoom({ join, onLeave }: Props) {
+export function VoiceRoom({ join, title, onLeave }: Props) {
   return (
     <LiveKitRoom
       serverUrl={join.url}
@@ -35,7 +37,7 @@ export function VoiceRoom({ join, onLeave }: Props) {
       onDisconnected={onLeave}
       className="voice-room"
     >
-      <h2>Room: {join.room}</h2>
+      <h2>{title}</h2>
       <ParticipantList />
       <div className="controls">
         <TrackToggle source={Track.Source.Microphone}>Microphone</TrackToggle>

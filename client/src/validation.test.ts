@@ -1,14 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it } from 'vitest'
-import { collect, displayNameError, emailError, passwordError, roomError } from './validation'
+import {
+  capacityError,
+  collect,
+  displayNameError,
+  emailError,
+  nameError,
+  passwordError,
+} from './validation'
 
 describe('validation (mirrors the server)', () => {
-  it.each(['', 'Lobby', '-lobby', 'a b', 'x'.repeat(33)])('rejects room %j', (room) => {
-    expect(roomError(room)).toBeDefined()
+  it('limits voice channel capacity to whole numbers from 2 to 8', () => {
+    expect(capacityError('8')).toBeUndefined()
+    expect(capacityError('2')).toBeUndefined()
+    for (const bad of ['1', '9', '4.5', '', 'x']) expect(capacityError(bad)).toBeDefined()
   })
 
-  it('accepts valid rooms', () => {
-    expect(roomError('team-42')).toBeUndefined()
+  it('checks names against a given maximum', () => {
+    expect(nameError('x'.repeat(50), 50)).toBeUndefined()
+    expect(nameError('x'.repeat(51), 50)).toBeDefined()
   })
 
   it.each(['', 'no-at', 'a@b', 'a b@c.com'])('rejects email %j', (email) => {

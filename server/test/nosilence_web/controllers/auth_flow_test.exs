@@ -49,10 +49,24 @@ defmodule NosilenceWeb.AuthFlowTest do
     me = build_conn() |> with_session(signed_in) |> get(~p"/api/me")
     assert %{"user" => %{"id" => id}} = json_response(me, 200)
 
-    voice =
-      build_conn() |> with_session(signed_in) |> post(~p"/api/voice/token", %{room: "lobby"})
+    created =
+      build_conn() |> with_session(signed_in) |> post(~p"/api/communities", %{name: "Ekip"})
 
-    assert %{"identity" => ^id, "room" => "lobby", "token" => _} = json_response(voice, 200)
+    assert %{"community" => %{"id" => community_id}} = json_response(created, 201)
+
+    shown = build_conn() |> with_session(signed_in) |> get(~p"/api/communities/#{community_id}")
+
+    assert %{"channels" => [%{"id" => channel_id, "name" => "General"}]} =
+             json_response(shown, 200)
+
+    Nosilence.LiveKitStub.room_with([])
+
+    voice =
+      build_conn()
+      |> with_session(signed_in)
+      |> post(~p"/api/channels/#{channel_id}/voice-token", %{})
+
+    assert %{"identity" => ^id, "room" => ^channel_id, "token" => _} = json_response(voice, 200)
 
     out = build_conn() |> with_session(signed_in) |> delete(~p"/api/session")
     assert response(out, 204)
@@ -150,12 +164,19 @@ defmodule NosilenceWeb.AuthFlowTest do
 
   describe "protection" do
     test "voice tokens need a session", %{conn: conn} do
-      conn = conn |> json_conn() |> post(~p"/api/voice/token", %{room: "lobby"})
+      conn =
+        conn |> json_conn() |> post(~p"/api/channels/#{Ecto.UUID.generate()}/voice-token", %{})
+
       assert json_response(conn, 401)
     end
 
-    test "the old unauthenticated dev endpoint is gone", %{conn: conn} do
-      conn = conn |> json_conn() |> post("/api/dev/voice-token", %{room: "lobby", name: "x"})
+    test "the old free-form voice endpoints are gone", %{conn: conn} do
+      gone = conn |> json_conn() |> post("/api/voice/token", %{room: "lobby"})
+      assert gone.status == 404
+
+      conn =
+        build_conn() |> json_conn() |> post("/api/dev/voice-token", %{room: "lobby", name: "x"})
+
       assert conn.status == 404
     end
 
