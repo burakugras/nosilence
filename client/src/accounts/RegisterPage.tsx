@@ -4,6 +4,7 @@ import { register } from '../api/accounts'
 import { Field, FormMessage } from '../components/Field'
 import { Link } from '../components/Link'
 import { collect, displayNameError, emailError, MIN_PASSWORD, passwordError } from '../validation'
+import { GoogleButton } from './GoogleButton'
 import { useSubmit } from './useSubmit'
 
 export function RegisterPage() {
@@ -51,6 +52,7 @@ export function RegisterPage() {
   return (
     <section>
       <h2>Create an account</h2>
+      <GoogleButton />
       <form className="stack-form" onSubmit={submit} noValidate>
         <Field
           label="Email"

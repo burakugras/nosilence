@@ -20,6 +20,7 @@ defmodule Nosilence.Accounts.User do
     field :confirmed_at, :utc_datetime
     field :age_confirmed_at, :utc_datetime
     field :age_confirmed, :boolean, virtual: true
+    field :google_sub, :string
 
     timestamps(type: :utc_datetime)
   end
@@ -34,6 +35,36 @@ defmodule Nosilence.Accounts.User do
     |> validate_display_name()
     |> validate_password(opts)
     |> validate_age_confirmed()
+  end
+
+  @doc """
+  Changeset for an account created through Google. The email is already verified
+  by Google, so the account starts confirmed and has no password.
+  """
+  def google_registration_changeset(user, %{sub: sub, email: email}, attrs) do
+    user
+    |> cast(attrs, [:display_name, :age_confirmed])
+    |> put_change(:email, email)
+    |> put_change(:google_sub, sub)
+    |> put_change(:confirmed_at, DateTime.utc_now(:second))
+    |> validate_email(validate_unique: true)
+    |> validate_display_name()
+    |> validate_age_confirmed()
+    |> unique_constraint(:google_sub)
+  end
+
+  @doc """
+  Links Google to an existing account found by email. If that account was never
+  confirmed, its password is removed: whoever set it never proved they own the
+  email, and keeping it would let them into the Google user's account.
+  """
+  def link_google_changeset(%__MODULE__{} = user, sub) do
+    changes =
+      if user.confirmed_at,
+        do: %{google_sub: sub},
+        else: %{google_sub: sub, confirmed_at: DateTime.utc_now(:second), hashed_password: nil}
+
+    user |> change(changes) |> unique_constraint(:google_sub)
   end
 
   @doc "Changeset for setting a new password (password reset)."

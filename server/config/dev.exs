@@ -57,6 +57,11 @@ config :nosilence, dev_routes: true
 # Links in account emails point to the Vite dev server; cookies work over plain http.
 config :nosilence, app_url: "http://127.0.0.1:5173", secure_cookies: false
 
+# Sign in with Google is enabled when these are set in infra/.env (see .env.example).
+config :nosilence, Nosilence.Accounts.Google,
+  client_id: env.({"GOOGLE_CLIENT_ID", nil}),
+  client_secret: env.({"GOOGLE_CLIENT_SECRET", nil})
+
 # LiveKit runs in Docker (see infra/); keys are shared through infra/.env
 config :nosilence, Nosilence.Voice,
   livekit_url: "ws://127.0.0.1:7880",

@@ -13,6 +13,8 @@ vi.mock('../api/accounts', () => ({
     register(...args)
     return respond()
   },
+  providers: () => Promise.resolve({ google: false }),
+  GOOGLE_SIGN_IN_URL: '/api/auth/google',
 }))
 
 function fill({

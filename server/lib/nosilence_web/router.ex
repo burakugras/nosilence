@@ -14,6 +14,18 @@ defmodule NosilenceWeb.Router do
     plug :require_authenticated
   end
 
+  # Full-page navigations to and from Google: no JSON content negotiation.
+  pipeline :oauth_redirect do
+    plug :fetch_current_user
+  end
+
+  scope "/api/auth/google", NosilenceWeb do
+    pipe_through :oauth_redirect
+
+    get "/", GoogleAuthController, :start
+    get "/callback", GoogleAuthController, :callback
+  end
+
   scope "/api", NosilenceWeb do
     pipe_through :api
 
@@ -25,6 +37,10 @@ defmodule NosilenceWeb.Router do
 
     post "/session", SessionController, :create
     delete "/session", SessionController, :delete
+
+    get "/auth/providers", GoogleAuthController, :providers
+    get "/auth/google/signup", GoogleAuthController, :pending
+    post "/auth/google/signup", GoogleAuthController, :complete
   end
 
   scope "/api", NosilenceWeb do

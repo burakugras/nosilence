@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
+import { CompleteSignupPage } from './accounts/CompleteSignupPage'
 import { ConfirmPage } from './accounts/ConfirmPage'
 import { LoginPage } from './accounts/LoginPage'
 import { ForgotPasswordPage, ResetPasswordPage } from './accounts/PasswordResetPages'
@@ -51,18 +52,19 @@ export default function App({ loadUser = currentUser, join = requestVoiceJoin }:
     )
 
   if (user === null) {
+    const onSignedIn = (signedIn: User) => {
+      setUser(signedIn)
+      navigate('/', { replace: true })
+    }
     const page =
-      path === '/register' ? (
+      path === '/complete-signup' ? (
+        <CompleteSignupPage onSignedIn={onSignedIn} />
+      ) : path === '/register' ? (
         <RegisterPage />
       ) : path === '/forgot-password' ? (
         <ForgotPasswordPage />
       ) : (
-        <LoginPage
-          onSignedIn={(signedIn) => {
-            setUser(signedIn)
-            navigate('/', { replace: true })
-          }}
-        />
+        <LoginPage onSignedIn={onSignedIn} googleError={params.get('error')} />
       )
     return <Shell>{page}</Shell>
   }

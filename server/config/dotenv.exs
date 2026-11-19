@@ -25,7 +25,12 @@ values =
     %{}
   end
 
-fn key ->
-  System.get_env(key) || Map.get(values, key) ||
-    raise "#{key} is not set. Copy infra/.env.example to infra/.env or export #{key}."
+# env.("KEY") raises when missing; env.({"KEY", default}) returns the default instead.
+fn
+  {key, default} ->
+    System.get_env(key) || Map.get(values, key, default)
+
+  key ->
+    System.get_env(key) || Map.get(values, key) ||
+      raise "#{key} is not set. Copy infra/.env.example to infra/.env or export #{key}."
 end

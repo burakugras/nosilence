@@ -26,3 +26,4 @@ What becomes easier, what becomes harder, what we must do next.
 | [0001](0001-stack-and-principles.md) | Stack and guiding principles |
 | [0002](0002-mls-in-the-browser.md) | MLS in the browser feeds LiveKit E2EE (phase 1.5 spike) |
 | [0003](0003-accounts-and-sessions.md) | Accounts and sessions |
+| [0004](0004-sign-in-with-google.md) | Sign in with Google |
