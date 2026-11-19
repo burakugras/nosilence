@@ -54,4 +54,27 @@ defmodule Nosilence.Voice do
 
     %{token: token, url: Keyword.fetch!(config, :livekit_url), room: room, identity: user.id}
   end
+
+  @doc """
+  Removes a user from the given voice rooms (after they lose access).
+  Best effort: their token would also expire, so a LiveKit outage only logs.
+  """
+  def remove_from_rooms(rooms, user_id) do
+    Enum.each(
+      rooms,
+      &warn_on_error(LiveKitAPI.remove_participant(&1, user_id), "RemoveParticipant")
+    )
+  end
+
+  @doc "Closes the given voice rooms, disconnecting everyone (community deleted)."
+  def close_rooms(rooms) do
+    Enum.each(rooms, &warn_on_error(LiveKitAPI.delete_room(&1), "DeleteRoom"))
+  end
+
+  defp warn_on_error(:ok, _what), do: :ok
+
+  defp warn_on_error(_error, what) do
+    require Logger
+    Logger.warning("LiveKit #{what} failed")
+  end
 end

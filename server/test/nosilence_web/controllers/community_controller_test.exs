@@ -18,7 +18,7 @@ defmodule NosilenceWeb.CommunityControllerTest do
     created = authed(owner) |> post(~p"/api/communities", %{name: "Ekip"})
     %{"community" => %{"id" => id}} = json_response(created, 201)
 
-    %{"channels" => [%{"id" => channel_id}]} =
+    %{"channels" => [%{"id" => channel_id, "kind" => "voice"}, %{"kind" => "text"}]} =
       json_response(authed(owner) |> get(~p"/api/communities/#{id}"), 200)
 
     %{owner: owner, id: id, channel_id: channel_id}

@@ -11,6 +11,8 @@ export default defineConfig({
     // Same-origin API calls during development: no CORS setup needed.
     proxy: {
       '/api': 'http://127.0.0.1:4000',
+      // Real-time gateway (WebSocket); the browser's Origin is passed on for the server's check.
+      '/socket': { target: 'ws://127.0.0.1:4000', ws: true },
     },
   },
   build: {

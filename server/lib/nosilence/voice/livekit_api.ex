@@ -29,6 +29,24 @@ defmodule Nosilence.Voice.LiveKitAPI do
     end
   end
 
+  @doc "Disconnects one participant. Not being in the room counts as success."
+  def remove_participant(room, identity) do
+    case call(room, "RemoveParticipant", %{room: room, identity: identity}) do
+      {:ok, _} -> :ok
+      {:error, :not_found} -> :ok
+      error -> error
+    end
+  end
+
+  @doc "Closes the room and disconnects everyone in it."
+  def delete_room(room) do
+    case call(room, "DeleteRoom", %{room: room}) do
+      {:ok, _} -> :ok
+      {:error, :not_found} -> :ok
+      error -> error
+    end
+  end
+
   defp call(room, method, body) do
     config = Application.fetch_env!(:nosilence, Nosilence.Voice)
 
@@ -54,6 +72,7 @@ defmodule Nosilence.Voice.LiveKitAPI do
 
     case Req.post(request) do
       {:ok, %{status: 200, body: body}} when is_map(body) -> {:ok, body}
+      {:ok, %{status: 404}} -> {:error, :not_found}
       {:ok, _response} -> {:error, :voice_unavailable}
       {:error, _exception} -> {:error, :voice_unavailable}
     end

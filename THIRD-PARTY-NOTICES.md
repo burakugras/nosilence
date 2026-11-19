@@ -68,6 +68,7 @@ Last reviewed: 2026-11-19 (Phase 2a). CI runs `mix hex.audit` and `npm audit` on
 | lodash.debounce | 4.0.8 | MIT |
 | loglevel | 1.9.2 | MIT |
 | machina | 7.0.1 | MIT |
+| phoenix (channels client) | 1.8.16 | MIT |
 | react | 19.3.1 | MIT |
 | react-dom | 19.3.1 | MIT |
 | rxjs | 7.8.2 | Apache-2.0 |

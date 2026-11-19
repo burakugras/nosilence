@@ -12,6 +12,7 @@ defmodule Nosilence.Application do
       Nosilence.Repo,
       {DNSCluster, query: Application.get_env(:nosilence, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Nosilence.PubSub},
+      NosilenceWeb.Gateway.Presence,
       # Start a worker by calling: Nosilence.Worker.start_link(arg)
       # {Nosilence.Worker, arg},
       # Start to serve requests, typically the last entry

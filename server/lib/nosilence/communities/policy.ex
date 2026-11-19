@@ -11,13 +11,22 @@ defmodule Nosilence.Communities.Policy do
   @type action ::
           :view
           | :join_voice
+          | :send_message
           | :leave
           | :create_channel
           | :manage_invites
           | :remove_member
           | :delete_community
+          | :delete_any_message
 
-  @owner_only [:create_channel, :manage_invites, :remove_member, :delete_community]
+  @owner_only [
+    :create_channel,
+    :manage_invites,
+    :remove_member,
+    :delete_community,
+    :delete_any_message
+  ]
+  @member [:view, :join_voice, :send_message, :leave]
 
   @spec can?(Membership.t() | nil, action()) :: boolean()
   def can?(nil, _action), do: false
@@ -25,8 +34,7 @@ defmodule Nosilence.Communities.Policy do
   def can?(%Membership{role: "owner"}, _action), do: true
   def can?(%Membership{role: "member"}, action) when action in @owner_only, do: false
 
-  def can?(%Membership{role: "member"}, action) when action in [:view, :join_voice, :leave],
-    do: true
+  def can?(%Membership{role: "member"}, action) when action in @member, do: true
 
   def can?(_membership, _action), do: false
 end

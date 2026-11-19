@@ -3,7 +3,10 @@ import { request } from './http'
 
 export type Role = 'owner' | 'member'
 export type CommunitySummary = { id: string; name: string; role: Role }
-export type Channel = { id: string; name: string; kind: 'voice'; capacity: number }
+export type Channel =
+  | { id: string; name: string; kind: 'voice'; capacity: number }
+  | { id: string; name: string; kind: 'text'; capacity: null }
+export type ChannelKind = Channel['kind']
 export type Member = { user_id: string; display_name: string; role: Role }
 export type Invite = { id: string; expires_at: string; max_uses: number | null; uses: number }
 
@@ -33,11 +36,14 @@ export const listMembers = async (id: string) =>
 export const removeMember = (id: string, userId: string) =>
   request<void>(`/api/communities/${id}/members/${userId}`, { method: 'DELETE' })
 
-export const createChannel = async (id: string, name: string, capacity?: number) =>
+export const createChannel = async (
+  id: string,
+  channel: { name: string; kind: ChannelKind; capacity?: number },
+) =>
   (
     await request<{ channel: Channel }>(`/api/communities/${id}/channels`, {
       method: 'POST',
-      body: capacity === undefined ? { name } : { name, capacity },
+      body: channel,
     })
   ).channel
 
