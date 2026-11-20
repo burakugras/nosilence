@@ -94,8 +94,10 @@ describe('TextChannel scrolling', () => {
     expect(second).toHaveClass('unseen')
     act(() => vi.advanceTimersByTime(3_100))
     expect(second).not.toHaveClass('unseen')
-    // The "New" line stays to show where the reader stopped.
+    // The "New" line stays a while to show where the reader stopped, then goes.
     expect(second).toHaveClass('first-unseen')
+    act(() => vi.advanceTimersByTime(5_100))
+    expect(second).not.toHaveClass('first-unseen')
     act(() => vi.advanceTimersByTime(1_000))
     expect(marked).toEqual(['m002'])
     expect(list).toBeInTheDocument()

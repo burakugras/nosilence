@@ -25,6 +25,8 @@ import { MAX_MESSAGE, messageError } from '../validation'
 
 /** Unread messages already on screen when the channel opens stay tinted this long. */
 const OPENING_TINT_MS = 3000
+/** Once every new message has been seen, the "New" line stays this much longer. */
+const NEW_LINE_LINGER_MS = 5000
 /** Wait this long after reading before saving the position (fewer requests). */
 const SAVE_READ_MS = 800
 
@@ -105,6 +107,14 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
   function onScroll() {
     if (performance.now() >= quietUntil.current) markSeen()
   }
+
+  // When everything new has been seen, the "New" line goes after a while.
+  const allSeen = unseenIds.length === 0
+  useEffect(() => {
+    if (!allSeen || !firstUnseenId) return
+    const timer = window.setTimeout(() => setFirstUnseenId(undefined), NEW_LINE_LINGER_MS)
+    return () => window.clearTimeout(timer)
+  }, [allSeen, firstUnseenId])
 
   // "50+" only while something is still unseen.
   const moreAbove = moreUnreadAbove && unseenIds.length > 0
