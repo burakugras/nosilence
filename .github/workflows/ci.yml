@@ -104,3 +104,25 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
+
+  desktop:
+    name: Desktop (Tauri, Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            desktop/target
+          key: cargo-desktop-${{ runner.os }}-${{ hashFiles('desktop/Cargo.lock') }}
+      # The app embeds the built client; an empty page is enough to compile and test the shell.
+      - run: New-Item -ItemType Directory -Force ../client/dist-desktop; Set-Content ../client/dist-desktop/index.html '<!doctype html>'
+        shell: pwsh
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
+

@@ -2,6 +2,7 @@
 import { Presence, Socket } from 'phoenix'
 import { fetchSocketTicket } from '../api/messages'
 import { ApiError } from '../api/http'
+import { socketUrl } from '../platform'
 import type { ConnectCommunity, OnlineMember, OpenVoiceTopic } from './types'
 
 // Retry quickly at first so a short network drop recovers within the 3 s target.
@@ -27,7 +28,7 @@ async function refreshTicket() {
 async function acquireSocket(): Promise<Socket> {
   users += 1
   if (socket) return socket
-  const s = new Socket('/socket', {
+  const s = new Socket(socketUrl, {
     authToken: () => ticket,
     reconnectAfterMs: (tries) => RECONNECT_MS[tries - 1] ?? 3000,
     rejoinAfterMs: (tries) => RECONNECT_MS[tries - 1] ?? 3000,

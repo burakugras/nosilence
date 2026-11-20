@@ -60,3 +60,5 @@ config :phoenix,
 
 # Fail over to the next MLS committer quickly in tests.
 config :nosilence, Nosilence.Voice.Group, commit_timeout_ms: 150
+
+config :nosilence, desktop_origins: ["http://desktop.test"]

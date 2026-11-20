@@ -6,7 +6,7 @@ defmodule Nosilence.Accounts do
   Other parts of the app use only the functions in this module.
   """
 
-  import Ecto.Query, only: [where: 3]
+  import Ecto.Query, only: [where: 3, from: 2]
 
   alias Ecto.Multi
   alias Nosilence.Accounts.{User, UserNotifier, UserToken}
@@ -95,6 +95,37 @@ defmodule Nosilence.Accounts do
   end
 
   def get_user_by_session(_), do: nil
+
+  ## Desktop app
+
+  @doc """
+  After Google sign-in in the system browser, a one-time code for the desktop
+  app. It is bound to the app's PKCE `code_challenge`, so only the app that
+  started the sign-in (and holds the verifier) can redeem it.
+  """
+  def create_desktop_handoff(%User{} = user, code_challenge) when is_binary(code_challenge) do
+    {code, row} = UserToken.build(user, "desktop_handoff", code_challenge)
+    Repo.insert!(row)
+    code
+  end
+
+  @doc "Redeems a handoff code once: `{:ok, user, session_token}` or `:error`."
+  def redeem_desktop_handoff(code, verifier) when is_binary(code) and is_binary(verifier) do
+    with {:ok, query} <- UserToken.verify_query(code, "desktop_handoff"),
+         {row, user} <- Repo.one(query),
+         # Single use, whatever happens next.
+         {1, _} <- Repo.delete_all(from t in UserToken, where: t.id == ^row.id),
+         true <- Plug.Crypto.secure_compare(row.sent_to, pkce_challenge(verifier)) do
+      {:ok, user, create_session(user)}
+    else
+      _ -> :error
+    end
+  end
+
+  def redeem_desktop_handoff(_, _), do: :error
+
+  defp pkce_challenge(verifier),
+    do: :crypto.hash(:sha256, verifier) |> Base.url_encode64(padding: false)
 
   @doc "The user with this id, or nil."
   def get_user(id) do

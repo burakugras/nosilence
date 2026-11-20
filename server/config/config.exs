@@ -44,6 +44,10 @@ config :nosilence, Nosilence.Communities,
   default_channel_capacity: 8,
   max_channel_capacity: 8
 
+# Origins of the desktop app's WebView (Tauri on Windows). They get CORS on the API,
+# may open the gateway and receive session tokens in JSON instead of a cookie.
+config :nosilence, desktop_origins: ["http://tauri.localhost", "https://tauri.localhost"]
+
 # Text messages (limits are configuration, see docs/ROADMAP.md rule 6).
 config :nosilence, Nosilence.Messaging, max_message_length: 2000, page_size: 50
 

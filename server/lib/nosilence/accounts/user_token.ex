@@ -20,6 +20,8 @@ defmodule Nosilence.Accounts.UserToken do
   @session_validity_days 60
   @confirm_validity_days 7
   @reset_validity_hours 1
+  # Desktop Google sign-in: the browser hands the app a code it must redeem at once.
+  @handoff_validity_minutes 2
 
   schema "users_tokens" do
     field :token_hash, :binary
@@ -34,7 +36,7 @@ defmodule Nosilence.Accounts.UserToken do
 
   @doc "Returns `{raw_token, %UserToken{}}` ready to insert."
   def build(%User{} = user, context, sent_to \\ nil)
-      when context in ["session", "confirm", "reset_password"] do
+      when context in ["session", "confirm", "reset_password", "desktop_handoff"] do
     raw = :crypto.strong_rand_bytes(@rand_size)
 
     {Base.url_encode64(raw, padding: false),
@@ -73,6 +75,14 @@ defmodule Nosilence.Accounts.UserToken do
       join: u in assoc(t, :user),
       where: t.inserted_at > ago(@reset_validity_hours, "hour") and t.sent_to == u.email,
       select: u
+  end
+
+  defp build_query(hash, "desktop_handoff") do
+    # `sent_to` holds the app's PKCE code challenge (see Accounts.create_desktop_handoff/2).
+    from t in by_hash_query(hash, "desktop_handoff"),
+      join: u in assoc(t, :user),
+      where: t.inserted_at > ago(@handoff_validity_minutes, "minute"),
+      select: {t, u}
   end
 
   @doc "Query for one token row by raw encoded token."

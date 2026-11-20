@@ -6,3 +6,4 @@ package-lock.json
 # Rust build output and generated WebAssembly bindings
 mls/target
 src/e2ee/mls-pkg
+dist-desktop

@@ -12,10 +12,13 @@
     "typecheck": "tsc -b",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "build:mls": "wasm-pack build mls --target web --release --no-pack --out-dir ../src/e2ee/mls-pkg --out-name nosilence_mls"
+    "build:mls": "wasm-pack build mls --target web --release --no-pack --out-dir ../src/e2ee/mls-pkg --out-name nosilence_mls",
+    "dev:desktop": "vite --mode desktop",
+    "build:desktop": "tsc -b && vite build --mode desktop"
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.25",
+    "@tauri-apps/api": "^2.12.5",
     "livekit-client": "^2.24.1",
     "phoenix": "^1.8.16",
     "react": "^19.3.1",

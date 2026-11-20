@@ -61,6 +61,24 @@ npm install
 npm run build:mls
 ```
 
+### Desktop app (Windows)
+
+The Tauri app in `desktop/` embeds the client built with `--mode desktop` and talks to the
+server in `client/.env.desktop`. Run it in development (opens a window, reloads on change):
+
+```powershell
+cd desktop
+npm install
+npm run dev
+```
+
+Build the installer (per-user, no administrator rights; unsigned for now, so Windows
+SmartScreen warns once). It is written to `desktop/target/release/bundle/nsis/`:
+
+```powershell
+npm run build
+```
+
 ### Testing voice on one computer
 
 Open the two participants in **different browsers** (for example Chrome and Edge)

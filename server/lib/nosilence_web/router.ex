@@ -41,6 +41,7 @@ defmodule NosilenceWeb.Router do
     get "/auth/providers", GoogleAuthController, :providers
     get "/auth/google/signup", GoogleAuthController, :pending
     post "/auth/google/signup", GoogleAuthController, :complete
+    post "/auth/desktop/exchange", GoogleAuthController, :exchange
   end
 
   scope "/api", NosilenceWeb do

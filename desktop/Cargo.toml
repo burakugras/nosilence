@@ -1,0 +1,32 @@
+[package]
+name = "nosilence-desktop"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-only"
+publish = false
+description = "Nosilence desktop app: a Tauri shell around the client"
+
+[lib]
+name = "nosilence_desktop"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+serde = { version = "1", features = ["derive"] }
+# Session token in the OS credential store (Windows Credential Manager; macOS Keychain later).
+keyring = { version = "3", features = ["windows-native", "apple-native"] }
+# Google sign-in through the system browser (RFC 8252 loopback + PKCE).
+tokio = { version = "1", features = ["net", "time", "io-util"] }
+sha2 = "0.10"
+base64 = "0.22"
+getrandom = "0.3"
+open = "5"
+form_urlencoded = "1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

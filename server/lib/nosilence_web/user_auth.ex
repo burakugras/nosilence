@@ -17,16 +17,38 @@ defmodule NosilenceWeb.UserAuth do
 
   def cookie_name, do: @cookie
 
-  @doc "Assigns `:current_user` (or nil) from the session cookie."
+  @doc """
+  Assigns `:current_user` (or nil) from the session: the HttpOnly cookie on the
+  web, an `Authorization: Bearer` header in the desktop app (which keeps the
+  token in the operating system's credential store). A bearer token is not sent
+  by browsers on their own, so it needs no CSRF protection.
+  """
   def fetch_current_user(conn, _opts) do
     conn = fetch_cookies(conn)
-    token = conn.cookies[@cookie]
+    token = bearer_token(conn) || conn.cookies[@cookie]
     user = token && Accounts.get_user_by_session(token)
 
     conn
     |> assign(:current_user, user)
     |> assign(:session_token, user && token)
   end
+
+  defp bearer_token(conn) do
+    case get_req_header(conn, "authorization") do
+      ["Bearer " <> token] -> token
+      _ -> nil
+    end
+  end
+
+  @doc "True for requests from the desktop app (its WebView's Origin)."
+  def desktop_origin?(conn) do
+    case get_req_header(conn, "origin") do
+      [origin] -> origin in desktop_origins()
+      _ -> false
+    end
+  end
+
+  def desktop_origins, do: Application.get_env(:nosilence, :desktop_origins, [])
 
   def require_authenticated(%{assigns: %{current_user: %{}}} = conn, _opts), do: conn
 

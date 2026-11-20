@@ -59,7 +59,7 @@ export default function App({ loadUser = currentUser }: Props) {
       path === '/complete-signup' ? (
         <CompleteSignupPage onSignedIn={onSignedIn} />
       ) : path === '/register' ? (
-        <RegisterPage />
+        <RegisterPage onSignedIn={onSignedIn} />
       ) : path === '/forgot-password' ? (
         <ForgotPasswordPage />
       ) : (

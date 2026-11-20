@@ -9,7 +9,13 @@ defmodule NosilenceWeb.SessionController do
     case Accounts.authenticate(email, password) do
       {:ok, user} ->
         token = Accounts.create_session(user)
-        conn |> UserAuth.put_session_cookie(token) |> json(%{user: user_json(user)})
+
+        # The desktop app stores the token itself; web pages only ever get the cookie.
+        if UserAuth.desktop_origin?(conn) do
+          json(conn, %{user: user_json(user), token: token})
+        else
+          conn |> UserAuth.put_session_cookie(token) |> json(%{user: user_json(user)})
+        end
 
       {:error, :unconfirmed} ->
         conn |> put_status(:forbidden) |> json(%{error: "confirm your email first"})

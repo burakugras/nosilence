@@ -37,6 +37,7 @@ defmodule NosilenceWeb.Endpoint do
     plug Phoenix.Ecto.CheckRepoStatus, otp_app: :nosilence
   end
 
+  plug NosilenceWeb.DesktopCors
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 
@@ -50,9 +51,11 @@ defmodule NosilenceWeb.Endpoint do
   plug Plug.Session, @session_options
   plug NosilenceWeb.Router
 
-  @doc "Only the web app's own origin may open the gateway connection."
+  @doc "Only the web app's own origin and the desktop app may open the gateway connection."
   def allowed_origin?(%URI{} = origin) do
     app = URI.parse(Application.fetch_env!(:nosilence, :app_url))
-    origin.scheme == app.scheme and origin.host == app.host and origin.port == app.port
+
+    (origin.scheme == app.scheme and origin.host == app.host and origin.port == app.port) or
+      URI.to_string(%{origin | path: nil}) in NosilenceWeb.UserAuth.desktop_origins()
   end
 end

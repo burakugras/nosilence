@@ -54,7 +54,8 @@ leaves; the UI shows when a call is end-to-end encrypted.
 **Done:** tests show the server only sees encrypted media and keys rotate on leave.
 
 ### Phase 6: Desktop (M)
-Tauri shell and platform layer, global push-to-talk, system tray, Windows installer.
+Tauri shell and platform layer, system tray, Windows installer. Global push-to-talk was
+moved to the deferred list (the method is not decided yet).
 **Done:** the installed Windows app talks in the same room as a web user.
 
 ### Phase 7: Robustness and compliance (M)
@@ -85,10 +86,15 @@ Postponed on purpose. Reviewed at the start of every phase.
 | Renaming and deleting channels | Phase 3 | Before Phase 8 |
 | Editing messages | Phase 4 | Before Phase 8 |
 | Rate limiting for sending messages | Phase 4 | Phase 7 |
-| Allowing the desktop app's origin on the gateway | Phase 4 | Phase 6 |
 | Persistent device keys and verifying people across calls | Phase 5 | After the MVP |
 | Hiding who speaks when from the media server (audio level header, packet timing) | Phase 5 | After the MVP |
 | Dependency audit for the Rust MLS crate (`cargo audit`) in CI | Phase 5 | Phase 7 |
+| Global push-to-talk: registered shortcut (takes the key from other apps) or a listening keyboard hook (also mouse buttons; antivirus may flag it) | Phase 6 | Decide before Phase 8 |
+| Code signing for the Windows installer (SmartScreen warning until then) | Phase 6 | Phase 8 |
+| Production server address in `client/.env.desktop` and the desktop CSP | Phase 6 | Phase 8 |
+| Automatic updates for the desktop app: Tauri updater with a signed update (key kept by Burak, copy in GitHub Secrets), releases on GitHub, check on start and a "Check for updates" button | Phase 6 | Phase 8 |
+| Finishing a first Google sign-up inside the desktop app (done in the browser for now) | Phase 6 | Before Phase 8 |
+| macOS app: check WebKit (WKWebView) with microphone and E2EE first | Phase 6 | After the MVP |
 | LiveKit webhooks as a second source for voice presence | Phase 4 | Phase 7 |
 | Disk encryption for the database and backups | Phase 4 | Phase 8 |
 | Legal review of retention periods (traffic logs 1 year, metadata 30 days) | Phase 0 | Phase 8 |
