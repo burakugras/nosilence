@@ -92,7 +92,7 @@ Postponed on purpose. Reviewed at the start of every phase.
 | Global push-to-talk: registered shortcut (takes the key from other apps) or a listening keyboard hook (also mouse buttons; antivirus may flag it) | Phase 6 | Decide before Phase 8 |
 | Code signing for the Windows installer (SmartScreen warning until then) | Phase 6 | Phase 8 |
 | Production server address in `client/.env.desktop` and the desktop CSP | Phase 6 | Phase 8 |
-| Automatic updates for the desktop app | Phase 6 | Phase 8 |
+| Automatic updates for the desktop app: Tauri updater with a signed update (key kept by Burak, copy in GitHub Secrets), releases on GitHub, check on start and a "Check for updates" button | Phase 6 | Phase 8 |
 | Finishing a first Google sign-up inside the desktop app (done in the browser for now) | Phase 6 | Before Phase 8 |
 | macOS app: check WebKit (WKWebView) with microphone and E2EE first | Phase 6 | After the MVP |
 | LiveKit webhooks as a second source for voice presence | Phase 4 | Phase 7 |
