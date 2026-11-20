@@ -36,3 +36,26 @@ export type ConnectCommunity = (
   communityId: string,
   listener: CommunityListener,
 ) => CommunityConnection
+
+export type VoiceTopicHandlers = {
+  /** Reply to every successful (re)join. */
+  joined: (reply: { action: 'create' | 'wait'; group_id: string }) => void
+  event: (event: string, payload: Record<string, unknown>) => void
+  /** Not allowed (not a member, or not a voice channel). */
+  refused: () => void
+  /** The server ended the topic. */
+  closed: () => void
+}
+
+export type VoiceTopic = {
+  /** Resolves true when the server accepted the message. */
+  push: (event: string, payload: object) => Promise<boolean>
+  close: () => void
+}
+
+/** Opens a voice channel's MLS topic. Swappable in tests. */
+export type OpenVoiceTopic = (
+  channelId: string,
+  params: () => object,
+  handlers: VoiceTopicHandlers,
+) => VoiceTopic

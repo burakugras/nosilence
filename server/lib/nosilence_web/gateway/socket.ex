@@ -11,6 +11,7 @@ defmodule NosilenceWeb.Gateway.Socket do
   alias Nosilence.Accounts
 
   channel "community:*", NosilenceWeb.Gateway.CommunityChannel
+  channel "voice:*", NosilenceWeb.Gateway.VoiceChannel
 
   @salt "gateway socket"
   @max_age 60

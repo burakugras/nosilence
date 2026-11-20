@@ -39,7 +39,7 @@ const message = (id: string, text: string, authorId = 'u2'): Message => ({
 
 const sent: string[] = []
 vi.mock('../api/messages', () => ({
-  listMessages: () => Promise.resolve({ messages: [message('m1', 'merhaba')], has_more: false }),
+  listMessages: () => Promise.resolve({ messages: [message('m1', 'hello')], has_more: false }),
   sendMessage: (_channel: string, text: string) => {
     sent.push(text)
     return Promise.resolve({ ...message('m22', text, 'u1') })
@@ -126,21 +126,21 @@ describe('CommunityPage', () => {
 
   it('shows messages, live updates, and sends with Enter', async () => {
     const { state } = renderPage()
-    expect(await screen.findByText('merhaba')).toBeInTheDocument()
+    expect(await screen.findByText('hello')).toBeInTheDocument()
 
     act(() =>
-      state.listener!.event({ type: 'message_created', message: message('m333', 'canlı mesaj') }),
+      state.listener!.event({ type: 'message_created', message: message('m333', 'live message') }),
     )
-    expect(screen.getByText('canlı mesaj')).toBeInTheDocument()
+    expect(screen.getByText('live message')).toBeInTheDocument()
 
     act(() => state.listener!.event({ type: 'message_deleted', id: 'm1', channel_id: 't1' }))
-    expect(screen.queryByText('merhaba')).toBeNull()
+    expect(screen.queryByText('hello')).toBeNull()
 
     const box = screen.getByRole('textbox', { name: 'Message #general' })
-    fireEvent.change(box, { target: { value: '  selam  ' } })
+    fireEvent.change(box, { target: { value: '  hi there  ' } })
     fireEvent.keyDown(box, { key: 'Enter' })
-    expect(await screen.findByText('selam')).toBeInTheDocument()
-    expect(sent).toEqual(['selam'])
+    expect(await screen.findByText('hi there')).toBeInTheDocument()
+    expect(sent).toEqual(['hi there'])
   })
 
   it('new members and channels appear without a reload', async () => {

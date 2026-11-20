@@ -86,6 +86,9 @@ Postponed on purpose. Reviewed at the start of every phase.
 | Editing messages | Phase 4 | Before Phase 8 |
 | Rate limiting for sending messages | Phase 4 | Phase 7 |
 | Allowing the desktop app's origin on the gateway | Phase 4 | Phase 6 |
+| Persistent device keys and verifying people across calls | Phase 5 | After the MVP |
+| Hiding who speaks when from the media server (audio level header, packet timing) | Phase 5 | After the MVP |
+| Dependency audit for the Rust MLS crate (`cargo audit`) in CI | Phase 5 | Phase 7 |
 | LiveKit webhooks as a second source for voice presence | Phase 4 | Phase 7 |
 | Disk encryption for the database and backups | Phase 4 | Phase 8 |
 | Legal review of retention periods (traffic logs 1 year, metadata 30 days) | Phase 0 | Phase 8 |

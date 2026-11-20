@@ -9,50 +9,178 @@ import {
   useRemoteParticipants,
 } from '@livekit/components-react'
 import {
+  isE2EESupported,
   LocalAudioTrack,
   RemoteAudioTrack,
+  Room,
   Track,
   type Participant,
   type RemoteParticipant,
 } from 'livekit-client'
 import { useEffect, useRef, useState } from 'react'
 import type { VoiceJoin } from '../api/voice'
+import { MlsKeyProvider } from '../e2ee/keyProvider'
+import { loadMls } from '../e2ee/mls'
+import { VoiceSession, type E2eeStatus } from '../e2ee/session'
+import { openVoiceTopic } from '../gateway/phoenixGateway'
+import type { OpenVoiceTopic } from '../gateway/types'
 import { summariseInbound, type InboundAudioSample, type InboundAudioSummary } from './stats'
 
 type Props = {
   join: VoiceJoin
+  channelId: string
   /** Shown as the heading, e.g. "Community · Channel". */
   title: string
   /** Connected to the room (used to show the user in the channel for others). */
   onConnected?: () => void
   onLeave: () => void
+  openTopic?: OpenVoiceTopic
 }
 
-export function VoiceRoom({ join, title, onConnected, onLeave }: Props) {
+type Status = E2eeStatus | { state: 'ended'; reason: 'unsupported' }
+
+/** A LiveKit room whose media keys come only from our MLS group (ADR 0007). */
+function createRoom() {
+  const keyProvider = new MlsKeyProvider()
+  const room = new Room({
+    e2ee: {
+      keyProvider,
+      worker: new Worker(new URL('livekit-client/e2ee-worker', import.meta.url), {
+        type: 'module',
+      }),
+    },
+  })
+  return { room, keyProvider }
+}
+
+export function VoiceRoom({
+  join,
+  channelId,
+  title,
+  onConnected,
+  onLeave,
+  openTopic = openVoiceTopic,
+}: Props) {
+  const [{ room, keyProvider }] = useState(createRoom)
+  const [status, setStatus] = useState<Status>(() =>
+    isE2EESupported() ? { state: 'securing' } : { state: 'ended', reason: 'unsupported' },
+  )
+  // Connect to LiveKit, and so publish the microphone, only once we hold a key.
+  const [keyed, setKeyed] = useState(false)
+
+  useEffect(() => {
+    if (!isE2EESupported()) return
+    let session: VoiceSession | undefined
+    let cancelled = false
+    void (async () => {
+      try {
+        const newGroup = await loadMls()
+        await room.setE2EEEnabled(true)
+        if (cancelled) return
+        session = new VoiceSession({
+          channelId,
+          identity: join.identity,
+          newGroup,
+          openTopic,
+          onKey: (key, epoch) =>
+            void keyProvider.setEpochKey(key, epoch).then(() => !cancelled && setKeyed(true)),
+          onStatus: (s) => !cancelled && setStatus(s),
+        })
+        session.start()
+      } catch {
+        if (!cancelled) setStatus({ state: 'ended', reason: 'failed' })
+      }
+    })()
+    return () => {
+      cancelled = true
+      session?.stop()
+    }
+  }, [room, keyProvider, channelId, join.identity, openTopic])
+
+  // Never stay connected without encryption.
+  const ended = status.state === 'ended'
+  useEffect(() => {
+    if (ended) void room.disconnect()
+  }, [ended, room])
+
   return (
     <LiveKitRoom
+      room={room}
       serverUrl={join.url}
       token={join.token}
-      connect
+      connect={keyed && !ended}
       audio={{ echoCancellation: true, noiseSuppression: true, autoGainControl: true }}
       video={false}
       onConnected={onConnected}
-      onDisconnected={onLeave}
+      onDisconnected={() => !ended && onLeave()}
       className="voice-room"
     >
       <h2>{title}</h2>
-      <ParticipantList />
+      <EncryptionPanel status={status} />
+      {!ended && <ParticipantList />}
       <div className="controls">
-        <TrackToggle source={Track.Source.Microphone}>Microphone</TrackToggle>
+        {!ended && <TrackToggle source={Track.Source.Microphone}>Microphone</TrackToggle>}
         <button type="button" onClick={onLeave}>
           Leave
         </button>
       </div>
-      <ConnectionStats />
-      <IncomingAudioStats />
-      {/* Plays every remote participant's audio. */}
-      <RoomAudioRenderer />
+      {!ended && (
+        <>
+          <ConnectionStats />
+          <IncomingAudioStats />
+          {/* Plays every remote participant's audio. */}
+          <RoomAudioRenderer />
+        </>
+      )}
     </LiveKitRoom>
+  )
+}
+
+const ENDED: Record<string, string> = {
+  unsupported:
+    'This browser cannot encrypt calls end to end, so you cannot join. Try a current Chrome, Edge or Firefox.',
+  failed: 'The call could not be encrypted, so you were disconnected. Leave and join again.',
+  removed: 'You no longer have access to this channel.',
+  superseded: 'You joined this channel from another tab or device.',
+}
+
+/** Shows that the call is end-to-end encrypted, with whom, and the code to compare. */
+export function EncryptionPanel({ status }: { status: Status }) {
+  const participants = useParticipants()
+  if (status.state === 'securing')
+    return (
+      <p className="e2ee" role="status">
+        Securing the call…
+      </p>
+    )
+  if (status.state === 'ended')
+    return (
+      <p className="e2ee e2ee-off" role="alert">
+        {ENDED[status.reason]}
+      </p>
+    )
+
+  const names = new Map(participants.map((p) => [p.identity, p.name || 'Anonymous']))
+  return (
+    <section className="e2ee" aria-label="Encryption">
+      <p>
+        <span aria-hidden="true">🔒</span> <strong>End-to-end encrypted.</strong> Only the people
+        below hold the key; the server cannot listen.
+      </p>
+      <p className="muted">
+        Key shared with:{' '}
+        {status.members
+          .map((id) => names.get(id) ?? 'someone not in this call (check the code!)')
+          .join(', ')}
+      </p>
+      <p>
+        Verification code: <code className="verification-code">{status.code}</code>
+      </p>
+      <p className="muted">
+        Compare it with the others in the call (for example by reading it aloud). If everyone sees
+        the same code, nobody else is listening in. It changes when someone joins or leaves.
+      </p>
+    </section>
   )
 }
 

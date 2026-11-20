@@ -67,7 +67,18 @@ jobs:
           node-version: '26'
           cache: npm
           cache-dependency-path: client/package-lock.json
+      # The MLS module (client/mls, Rust) is compiled to WebAssembly before the checks.
+      - run: rustup target add wasm32-unknown-unknown
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/wasm-pack
+            ~/.cargo/registry
+            client/mls/target
+          key: wasm-${{ runner.os }}-${{ hashFiles('client/mls/Cargo.lock') }}-wasm-pack-0.15.1
+      - run: command -v wasm-pack || cargo install wasm-pack --version 0.15.1 --locked
       - run: npm ci
+      - run: npm run build:mls
       # Fails on known vulnerabilities in shipped (non-dev) dependencies.
       - run: npm audit --omit=dev --audit-level=moderate
       - run: npm run format:check
@@ -75,3 +86,21 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  mls:
+    name: MLS (Rust)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client/mls
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            client/mls/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('client/mls/Cargo.lock') }}
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked

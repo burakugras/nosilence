@@ -116,6 +116,7 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
           <VoiceRoom
             key={voice.channel.id}
             join={voice.join}
+            channelId={voice.channel.id}
             title={`${community.name} · ${voice.channel.name}`}
             onConnected={() => setVoiceChannel(voice.channel.id)}
             onLeave={leaveVoice}

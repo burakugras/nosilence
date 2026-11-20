@@ -13,6 +13,9 @@ defmodule Nosilence.Application do
       {DNSCluster, query: Application.get_env(:nosilence, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Nosilence.PubSub},
       NosilenceWeb.Gateway.Presence,
+      # One process per voice channel in use, ordering its MLS group changes.
+      {Registry, keys: :unique, name: Nosilence.Voice.GroupRegistry},
+      {DynamicSupervisor, name: Nosilence.Voice.GroupSupervisor, strategy: :one_for_one},
       # Start a worker by calling: Nosilence.Worker.start_link(arg)
       # {Nosilence.Worker, arg},
       # Start to serve requests, typically the last entry

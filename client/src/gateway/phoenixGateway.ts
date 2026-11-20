@@ -2,7 +2,7 @@
 import { Presence, Socket } from 'phoenix'
 import { fetchSocketTicket } from '../api/messages'
 import { ApiError } from '../api/http'
-import type { ConnectCommunity, OnlineMember } from './types'
+import type { ConnectCommunity, OnlineMember, OpenVoiceTopic } from './types'
 
 // Retry quickly at first so a short network drop recovers within the 3 s target.
 const RECONNECT_MS = [100, 500, 1000, 2000]
@@ -89,6 +89,56 @@ export const connectCommunity: ConnectCommunity = (communityId, listener) => {
       voiceChannelId = channelId
       channel?.push(channelId ? 'voice_join' : 'voice_leave', { channel_id: channelId })
     },
+    close() {
+      if (closed) return
+      closed = true
+      if (channel) {
+        channel.leave()
+        releaseSocket()
+      }
+    },
+  }
+}
+
+/**
+ * The MLS topic of one voice channel. `params` is called on every (re)join, so
+ * each join carries a fresh key package.
+ */
+export const openVoiceTopic: OpenVoiceTopic = (channelId, params, handlers) => {
+  let closed = false
+  let channel: ReturnType<Socket['channel']> | undefined
+
+  void acquireSocket().then((s) => {
+    if (closed) return releaseSocket()
+    const ch = s.channel(`voice:${channelId}`, params)
+    channel = ch
+    for (const event of [
+      'create',
+      'welcome',
+      'commit',
+      'commit_request',
+      'reset',
+      'superseded',
+      'removed',
+    ])
+      ch.on(event, (payload) => handlers.event(event, payload))
+    // The server ends the topic after reset/superseded/removed; never rejoin by ourselves then.
+    ch.onClose(() => handlers.closed())
+    ch.join()
+      .receive('ok', (reply) => handlers.joined(reply))
+      .receive('error', () => handlers.refused())
+  })
+
+  return {
+    push: (event, payload) =>
+      new Promise((resolve) => {
+        if (!channel) return resolve(false)
+        channel
+          .push(event, payload)
+          .receive('ok', () => resolve(true))
+          .receive('error', () => resolve(false))
+          .receive('timeout', () => resolve(false))
+      }),
     close() {
       if (closed) return
       closed = true

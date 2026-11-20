@@ -31,7 +31,8 @@ declare module 'phoenix' {
     constructor(endPoint: string, opts?: SocketOptions)
     connect(): void
     disconnect(callback?: () => void, code?: number, reason?: string): void
-    channel(topic: string, params?: object): Channel
+    /** `params` may be a function: it is called again on every rejoin. */
+    channel(topic: string, params?: object | (() => object)): Channel
     isConnected(): boolean
     onOpen(callback: () => void): string
     onError(callback: Callback): string

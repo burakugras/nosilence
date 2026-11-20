@@ -50,6 +50,17 @@ has dropped. Restart the containers:
 docker compose restart
 ```
 
+Build the MLS module once (and after changing `client/mls`). It needs Rust with the
+WebAssembly target and wasm-pack:
+
+```powershell
+rustup target add wasm32-unknown-unknown
+cargo install wasm-pack --version 0.15.1 --locked
+cd client
+npm install
+npm run build:mls
+```
+
 ### Testing voice on one computer
 
 Open the two participants in **different browsers** (for example Chrome and Edge)

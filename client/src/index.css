@@ -278,3 +278,26 @@ body {
   padding: 0.5rem;
   resize: vertical;
 }
+
+/* End-to-end encryption panel */
+.e2ee {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid #2e9d57;
+  background: color-mix(in srgb, #2e9d57 8%, transparent);
+}
+
+.e2ee p {
+  margin: 0.25rem 0;
+}
+
+.e2ee-off {
+  border-left-color: #c62828;
+  background: color-mix(in srgb, #c62828 8%, transparent);
+}
+
+.verification-code {
+  font-size: 1.05em;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
