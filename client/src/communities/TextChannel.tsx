@@ -1,11 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react'
 import { ApiError } from '../api/http'
 import { deleteMessage, listMessages, sendMessage, type Message } from '../api/messages'
 import { FormMessage } from '../components/Field'
 import type { CommunityLive } from '../gateway/useCommunityLive'
 import { merge, reconcile, type History } from './messageHistory'
 import { MAX_MESSAGE, messageError } from '../validation'
+
+/** Within this many pixels of the bottom counts as "reading the latest". */
+const NEAR_BOTTOM_PX = 80
 
 type Props = {
   channel: { id: string; name: string }
@@ -25,6 +35,32 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
 
   const update = (change: (messages: Message[]) => Message[]) =>
     setHistory((h) => h && { ...h, messages: change(h.messages) })
+
+  // Scrolling: follow new messages while the reader is at the bottom; leave the
+  // view alone while they read older ones; keep the place when older ones load.
+  const list = useRef<HTMLOListElement>(null)
+  const atBottom = useRef(true)
+  const heightBeforeOlder = useRef<number>(undefined)
+  const firstId = messages?.[0]?.id
+  const lastId = messages?.[messages.length - 1]?.id
+
+  function onScroll() {
+    const el = list.current
+    if (el) atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX
+  }
+
+  useLayoutEffect(() => {
+    const el = list.current
+    if (el && atBottom.current) el.scrollTop = el.scrollHeight
+  }, [lastId])
+
+  useLayoutEffect(() => {
+    const el = list.current
+    if (el && heightBeforeOlder.current !== undefined) {
+      el.scrollTop += el.scrollHeight - heightBeforeOlder.current
+      heightBeforeOlder.current = undefined
+    }
+  }, [firstId])
 
   // Latest page on open and after every reconnect.
   useEffect(() => {
@@ -59,6 +95,7 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
     if (!messages?.length) return
     try {
       const page = await listMessages(channel.id, messages[0].id)
+      heightBeforeOlder.current = list.current?.scrollHeight
       setHistory((h) => ({
         messages: merge(h?.messages ?? [], page.messages),
         hasMore: page.has_more,
@@ -76,6 +113,8 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
     setMessage(undefined)
     try {
       const sent = await sendMessage(channel.id, text.trim())
+      // Your own message always brings you to the bottom.
+      atBottom.current = true
       update((ms) => merge(ms, [sent]))
       setText('')
     } catch (e) {
@@ -118,7 +157,7 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
       ) : messages.length === 0 ? (
         <p className="muted">No messages yet. Say hello!</p>
       ) : (
-        <ol className="messages" aria-label="Messages">
+        <ol className="messages" aria-label="Messages" ref={list} onScroll={onScroll}>
           {messages.map((m) => (
             <li key={m.id}>
               <div className="message-head">
