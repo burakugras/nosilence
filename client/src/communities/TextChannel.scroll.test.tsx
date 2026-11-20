@@ -28,6 +28,12 @@ function fakeLayout(el: HTMLElement) {
       return this.tagName === 'LI' ? [...this.parentElement!.children].indexOf(this) * 100 : 0
     },
   })
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.tagName === 'LI' ? 100 : 0
+    },
+  })
   Object.defineProperty(el, 'clientHeight', { configurable: true, value: 100 })
   Object.defineProperty(el, 'scrollHeight', {
     configurable: true,
@@ -80,7 +86,8 @@ describe('TextChannel scrolling', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '2 new messages ↓' }))
     expect(list.scrollTop).toBe(200)
-    expect(screen.queryByRole('button', { name: /new message/ })).toBeNull()
+    // Message 3 is now on screen; message 4 is still below, so one remains.
+    expect(screen.getByRole('button', { name: '1 new message ↓' })).toBeInTheDocument()
     expect(screen.getByText('message 3').closest('li')).toHaveClass('first-unseen')
   })
 
@@ -91,16 +98,37 @@ describe('TextChannel scrolling', () => {
     expect(screen.queryByRole('button', { name: /new message/ })).toBeNull()
   })
 
+  it('tints unseen messages until they have been on screen', async () => {
+    const { list, emit } = await setup()
+    list.scrollTop = 0
+    fireEvent.scroll(list)
+    emit({ type: 'message_created', message: msg(3) })
+    emit({ type: 'message_created', message: msg(4) })
+    const third = screen.getByText('message 3').closest('li')!
+    const fourth = screen.getByText('message 4').closest('li')!
+    expect(third).toHaveClass('unseen')
+    expect(fourth).toHaveClass('unseen')
+
+    // Scrolling so only message 3 is on screen: it turns normal, 4 stays tinted.
+    list.scrollTop = 200
+    fireEvent.scroll(list)
+    expect(third).not.toHaveClass('unseen')
+    expect(fourth).toHaveClass('unseen')
+    expect(screen.getByRole('button', { name: '1 new message ↓' })).toBeInTheDocument()
+  })
+
   it('scrolling down to the bottom clears the strip and the mark', async () => {
     const { list, emit } = await setup()
     list.scrollTop = 0
     fireEvent.scroll(list)
     emit({ type: 'message_created', message: msg(3) })
     expect(screen.getByRole('button', { name: '1 new message ↓' })).toBeInTheDocument()
+    // The bottom: 3 messages of 100 px in a 100 px window.
     list.scrollTop = 200
     fireEvent.scroll(list)
     expect(screen.queryByRole('button', { name: /new message/ })).toBeNull()
     expect(screen.getByText('message 3').closest('li')).not.toHaveClass('first-unseen')
+    expect(screen.getByText('message 3').closest('li')).not.toHaveClass('unseen')
   })
 
   it('always goes to the end after sending', async () => {

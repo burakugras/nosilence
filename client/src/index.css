@@ -251,6 +251,12 @@ body {
 
 .messages li {
   padding: 0.35rem 0;
+  /* Unseen messages fade back to normal once they have been on screen. */
+  transition: background-color 0.8s ease;
+}
+
+.messages li.unseen {
+  background: color-mix(in srgb, #4f46e5 12%, transparent);
 }
 
 .message-head {

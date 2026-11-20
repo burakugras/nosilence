@@ -46,9 +46,10 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
   // Messages from others waiting to be checked: did they land in sight?
   const incoming = useRef<string[]>([])
   const heightBeforeOlder = useRef<number>(undefined)
-  // Messages from others that arrived while the reader was further up, and the
-  // first of them (marked with a "New" line, where the strip takes the reader).
-  const [unseen, setUnseen] = useState(0)
+  // Messages from others that arrived out of sight and have not been on screen
+  // yet (tinted until they are), and the first of them (marked with a "New"
+  // line; the strip takes the reader there).
+  const [unseenIds, setUnseenIds] = useState<string[]>([])
   const [firstUnseenId, setFirstUnseenId] = useState<string>()
   // Sending too fast: a live countdown; sending stays off until it ends.
   const wait = useCountdown()
@@ -56,11 +57,27 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
   const firstId = messages?.[0]?.id
   const lastId = messages?.[messages.length - 1]?.id
 
-  function onScroll() {
+  const item = (el: HTMLElement, id: string) =>
+    el.querySelector<HTMLElement>(`[data-message-id="${id}"]`)
+
+  /** True if any part of the message is inside the visible part of the list. */
+  function inSight(el: HTMLElement, id: string) {
+    const li = item(el, id)
+    if (!li) return false
+    const top = li.offsetTop - el.offsetTop
+    return top < el.scrollTop + el.clientHeight && top + li.offsetHeight > el.scrollTop
+  }
+
+  /** Messages that have now been on screen are no longer unseen. */
+  function markSeen() {
     const el = list.current
     if (!el) return
+    setUnseenIds((ids) => {
+      const left = ids.filter((id) => !inSight(el, id))
+      return left.length === ids.length ? ids : left
+    })
     if (el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX) {
-      setUnseen(0)
+      setUnseenIds([])
       setFirstUnseenId(undefined)
     }
   }
@@ -68,9 +85,9 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
   /** Scrolls so the first message the reader has not seen is at the top. */
   function jumpToFirstUnseen() {
     const el = list.current
-    const first = el?.querySelector<HTMLElement>(`[data-message-id="${firstUnseenId}"]`)
+    const first = el && firstUnseenId ? item(el, firstUnseenId) : null
     if (el && first) el.scrollTop = first.offsetTop - el.offsetTop
-    setUnseen(0)
+    markSeen()
   }
 
   useLayoutEffect(() => {
@@ -83,13 +100,10 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
       el.scrollTop = el.scrollHeight
       return
     }
-    // Only messages that landed below what is on screen count as unseen.
-    const outOfSight = arrived.filter((id) => {
-      const item = el.querySelector<HTMLElement>(`[data-message-id="${id}"]`)
-      return item && item.offsetTop - el.offsetTop >= el.scrollTop + el.clientHeight
-    })
+    // Only messages that landed out of sight count as unseen.
+    const outOfSight = arrived.filter((id) => item(el, id) && !inSight(el, id))
     if (outOfSight.length > 0) {
-      setUnseen((n) => n + outOfSight.length)
+      setUnseenIds((ids) => [...ids, ...outOfSight])
       setFirstUnseenId((id) => id ?? outOfSight[0])
     }
   }, [lastId])
@@ -207,12 +221,16 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
         <p className="muted">No messages yet. Say hello!</p>
       ) : (
         <div className="messages-wrap">
-          <ol className="messages" aria-label="Messages" ref={list} onScroll={onScroll}>
+          <ol className="messages" aria-label="Messages" ref={list} onScroll={markSeen}>
             {messages.map((m) => (
               <li
                 key={m.id}
                 data-message-id={m.id}
-                className={m.id === firstUnseenId ? 'first-unseen' : undefined}
+                className={
+                  [m.id === firstUnseenId && 'first-unseen', unseenIds.includes(m.id) && 'unseen']
+                    .filter(Boolean)
+                    .join(' ') || undefined
+                }
               >
                 <div className="message-head">
                   <strong>{m.author?.display_name ?? 'Deleted user'}</strong>{' '}
@@ -235,9 +253,9 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
               </li>
             ))}
           </ol>
-          {unseen > 0 && (
+          {unseenIds.length > 0 && (
             <button type="button" className="new-messages" onClick={jumpToFirstUnseen}>
-              {unseen === 1 ? '1 new message' : `${unseen} new messages`} ↓
+              {unseenIds.length === 1 ? '1 new message' : `${unseenIds.length} new messages`} ↓
             </button>
           )}
         </div>
