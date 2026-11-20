@@ -3,7 +3,17 @@ defmodule NosilenceWeb.AccountController do
   use NosilenceWeb, :controller
 
   alias Nosilence.Accounts
-  alias NosilenceWeb.ChangesetJSON
+  alias NosilenceWeb.{ChangesetJSON, RateLimited}
+
+  # Every action here may send an email: limit them per IP address.
+  plug :limit_by_ip when action in [:register, :resend_confirmation, :request_password_reset]
+
+  defp limit_by_ip(conn, _opts) do
+    case RateLimited.check(conn, email_ip: RateLimited.ip(conn)) do
+      :ok -> conn
+      {:halted, conn} -> halt(conn)
+    end
+  end
 
   def register(conn, params) do
     attrs = Map.take(params, ["email", "display_name", "password", "age_confirmed"])

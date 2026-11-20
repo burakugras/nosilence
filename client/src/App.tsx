@@ -2,7 +2,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { CompleteSignupPage } from './accounts/CompleteSignupPage'
 import { ConfirmPage } from './accounts/ConfirmPage'
+import { AccountPage } from './accounts/AccountPage'
 import { LoginPage } from './accounts/LoginPage'
+import { Link } from './components/Link'
 import { ForgotPasswordPage, ResetPasswordPage } from './accounts/PasswordResetPages'
 import { RegisterPage } from './accounts/RegisterPage'
 import { currentUser, signOut, type User } from './api/accounts'
@@ -73,7 +75,15 @@ export default function App({ loadUser = currentUser }: Props) {
 
   const community = COMMUNITY_PATH.exec(path)
   const page =
-    path === '/invite' ? (
+    path === '/account' ? (
+      <AccountPage
+        user={user}
+        onDeleted={() => {
+          setUser(null)
+          navigate('/login', { replace: true })
+        }}
+      />
+    ) : path === '/invite' ? (
       <InvitePage token={params.get('token')} />
     ) : community ? (
       <CommunityPage key={community[1]} communityId={community[1]} currentUserId={user.id} />
@@ -110,7 +120,7 @@ function Shell({
         <h1>Nosilence</h1>
         {user && (
           <p>
-            {user.display_name}{' '}
+            <Link to="/account">{user.display_name}</Link>{' '}
             <button type="button" className="link-button" onClick={onSignOut}>
               Sign out
             </button>

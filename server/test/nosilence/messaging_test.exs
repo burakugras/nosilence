@@ -30,7 +30,17 @@ defmodule Nosilence.MessagingTest do
   end
 
   test "history pages backwards with a cursor", %{text_channel: ch, owner: owner} do
-    for i <- 1..55, do: {:ok, _} = Messaging.send_message(owner, ch.id, "m#{i}")
+    # Inserted directly: sending 55 at once would hit the message rate limit.
+    base = DateTime.utc_now()
+
+    for i <- 1..55 do
+      Repo.insert!(%Message{
+        channel_id: ch.id,
+        author_id: owner.id,
+        content: "m#{i}",
+        inserted_at: DateTime.add(base, i, :millisecond)
+      })
+    end
 
     {:ok, latest} = Messaging.list_messages(owner, ch.id)
     assert length(latest.messages) == 50

@@ -59,9 +59,11 @@ moved to the deferred list (the method is not decided yet).
 **Done:** the installed Windows app talks in the same room as a web user.
 
 ### Phase 7: Robustness and compliance (M)
-Reconnect and packet-loss tests under emulated bad networks, p95 latency measurement,
-anonymous aggregate metrics, automatic retention jobs (30 days / 1 year),
-account deletion and data export.
+In two parts. **7a, security and data:** rate limits, the legally required traffic log,
+automatic retention jobs (30 days / 1 year), account deletion and data export, a Rust
+dependency audit. **7b, networks and measurement:** reconnect and packet-loss tests under
+emulated bad networks, p95 latency measurement, anonymous aggregate metrics, LiveKit
+webhooks for voice presence.
 **Done:** all four performance targets are measured and met:
 mouth-to-ear p95 < 150 ms, join < 2 s, reconnect < 3 s, intelligible speech at 10% packet loss.
 
@@ -79,16 +81,12 @@ Postponed on purpose. Reviewed at the start of every phase.
 
 | Item | Decided in | Target |
 | --- | --- | --- |
-| Rate limiting for sign-in and email endpoints | Phase 2 | Phase 7 |
-| Scheduled cleanup of expired sessions and email tokens | Phase 2 | Phase 7 |
-| Transferring community ownership | Phase 3 | Before Phase 8 |
+| Transferring community ownership, also offered when deleting an account (today owned communities are deleted with the account) | Phase 3 | Before Phase 8 |
 | Moderator role | Phase 3 | Before Phase 8 |
 | Renaming and deleting channels | Phase 3 | Before Phase 8 |
 | Editing messages | Phase 4 | Before Phase 8 |
-| Rate limiting for sending messages | Phase 4 | Phase 7 |
 | Persistent device keys and verifying people across calls | Phase 5 | After the MVP |
 | Hiding who speaks when from the media server (audio level header, packet timing) | Phase 5 | After the MVP |
-| Dependency audit for the Rust MLS crate (`cargo audit`) in CI | Phase 5 | Phase 7 |
 | Global push-to-talk: registered shortcut (takes the key from other apps) or a listening keyboard hook (also mouse buttons; antivirus may flag it) | Phase 6 | Decide before Phase 8 |
 | Code signing for the Windows installer (SmartScreen warning until then) | Phase 6 | Phase 8 |
 | Production server address in `client/.env.desktop` and the desktop CSP | Phase 6 | Phase 8 |
@@ -102,3 +100,6 @@ Postponed on purpose. Reviewed at the start of every phase.
 | Contributor licence agreement before accepting outside contributions | Phase 0 | First outside contribution |
 | Whether to move to `AGPL-3.0-or-later` | Phase 0 | When a new AGPL version is published |
 | End-to-end encrypted text messages | Phase 0 | After the MVP |
+| Behind a reverse proxy, rate limits and traffic records need the real client address (trusted `X-Forwarded-For`) | Phase 7a | Phase 8 |
+| Restricted access to traffic records, with every access logged; a way to answer lawful requests | Phase 7a | Phase 8 |
+| Re-check ignored Rust advisories (`.cargo/audit.toml`) when openmls or Tauri are updated | Phase 7a | Every dependency update |

@@ -46,7 +46,8 @@ defmodule Nosilence.Messaging do
   @doc "Sends a message to a text channel and announces it to the community."
   def send_message(%User{} = user, channel_id, text) do
     with {:ok, channel, _} <- text_channel(user, channel_id, :send_message),
-         {:ok, text} <- validate_text(text) do
+         {:ok, text} <- validate_text(text),
+         :ok <- Nosilence.RateLimit.hit(:message, user.id) do
       # `log: false`: the query log would print the content as a parameter.
       message =
         Repo.insert!(%Message{channel_id: channel.id, author_id: user.id, content: text},
@@ -80,6 +81,24 @@ defmodule Nosilence.Messaging do
       {:error, :forbidden} -> {:error, :forbidden}
       _ -> {:error, :not_found}
     end
+  end
+
+  @doc "Every message the user wrote, for their data export."
+  def messages_by(%User{id: user_id}) do
+    Repo.all(
+      from m in Message,
+        join: ch in assoc(m, :channel),
+        join: c in assoc(ch, :community),
+        where: m.author_id == ^user_id,
+        order_by: m.inserted_at,
+        select: %{community: c.name, channel: ch.name, text: m.content, sent_at: m.inserted_at}
+    )
+  end
+
+  @doc "Deletes every message the user wrote (account deletion, if they ask for it)."
+  def delete_messages_by(%User{id: user_id}) do
+    {count, _} = Repo.delete_all(from m in Message, where: m.author_id == ^user_id)
+    count
   end
 
   @doc "The client-facing shape of a message, used by the API and the gateway."

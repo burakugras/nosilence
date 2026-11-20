@@ -6,7 +6,7 @@ defmodule Nosilence.Accounts do
   Other parts of the app use only the functions in this module.
   """
 
-  import Ecto.Query, only: [where: 3, from: 2]
+  import Ecto.Query, only: [from: 2]
 
   alias Ecto.Multi
   alias Nosilence.Accounts.{User, UserNotifier, UserToken}
@@ -57,9 +57,21 @@ defmodule Nosilence.Accounts do
   end
 
   defp deliver_confirmation(user) do
-    {token, row} = UserToken.build(user, "confirm", user.email)
-    Repo.insert!(row)
-    UserNotifier.deliver_confirmation(user, link("/confirm", token))
+    with :ok <- email_allowed(user.email) do
+      {token, row} = UserToken.build(user, "confirm", user.email)
+      Repo.insert!(row)
+      UserNotifier.deliver_confirmation(user, link("/confirm", token))
+    end
+  end
+
+  # At most a few emails per address and hour (ADR 0009). Over the limit nothing
+  # is sent, but the caller answers as usual: the response must not reveal
+  # whether an account exists.
+  defp email_allowed(email) do
+    case Nosilence.RateLimit.hit(:email_address, String.downcase(email)) do
+      :ok -> :ok
+      {:error, :rate_limited, _} -> :skipped
+    end
   end
 
   ## Sessions
@@ -127,6 +139,57 @@ defmodule Nosilence.Accounts do
   defp pkce_challenge(verifier),
     do: :crypto.hash(:sha256, verifier) |> Base.url_encode64(padding: false)
 
+  ## Account deletion
+
+  @doc """
+  Checks that the person deleting the account means it: they type the account's
+  email, and accounts with a password must give it. `:ok` or `{:error, field}`.
+  """
+  def verify_deletion(%User{} = user, attrs) do
+    confirm = attrs["confirm_email"]
+
+    cond do
+      not is_binary(confirm) or
+          String.downcase(String.trim(confirm)) != String.downcase(user.email) ->
+        {:error, :confirm_email}
+
+      user.hashed_password && not User.valid_password?(user, attrs["password"]) ->
+        {:error, :password}
+
+      true ->
+        :ok
+    end
+  end
+
+  @doc "Deletes the user row; sessions, codes and memberships go with it."
+  def delete_user(%User{} = user) do
+    Repo.delete!(user)
+    :ok
+  end
+
+  @doc "Facts about the account itself, for the data export."
+  def export_account(%User{} = user) do
+    sessions =
+      Repo.all(
+        from t in UserToken,
+          where: t.user_id == ^user.id and t.context == "session",
+          order_by: t.inserted_at,
+          select: t.inserted_at
+      )
+
+    %{
+      id: user.id,
+      email: user.email,
+      display_name: user.display_name,
+      created_at: user.inserted_at,
+      email_confirmed_at: user.confirmed_at,
+      over_18_confirmed_at: user.age_confirmed_at,
+      signs_in_with_password: not is_nil(user.hashed_password),
+      signs_in_with_google: not is_nil(user.google_sub),
+      sessions_started_at: sessions
+    }
+  end
+
   @doc "The user with this id, or nil."
   def get_user(id) do
     case Ecto.UUID.cast(id) do
@@ -176,7 +239,8 @@ defmodule Nosilence.Accounts do
 
   @doc "Emails a reset link if the account exists. Always returns `:ok`."
   def request_password_reset(email) when is_binary(email) do
-    with %User{} = user <- get_user_by_email(email) do
+    with %User{} = user <- get_user_by_email(email),
+         :ok <- email_allowed(user.email) do
       {token, row} = UserToken.build(user, "reset_password", user.email)
       Repo.insert!(row)
       UserNotifier.deliver_password_reset(user, link("/reset-password", token))
@@ -221,11 +285,9 @@ defmodule Nosilence.Accounts do
 
   def get_user_by_email(_), do: nil
 
-  @doc false
-  # Deletes expired tokens. Phase 7 schedules this with the other retention jobs.
+  @doc "Deletes sessions and email/sign-in codes past their validity. Returns how many."
   def delete_expired_tokens do
-    cutoff = DateTime.add(DateTime.utc_now(), -UserToken.session_validity_days(), :day)
-    {count, _} = UserToken |> where([t], t.inserted_at < ^cutoff) |> Repo.delete_all()
+    {count, _} = Repo.delete_all(UserToken.expired_query())
     count
   end
 

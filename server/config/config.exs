@@ -48,6 +48,28 @@ config :nosilence, Nosilence.Communities,
 # may open the gateway and receive session tokens in JSON instead of a cookie.
 config :nosilence, desktop_origins: ["http://tauri.localhost", "https://tauri.localhost"]
 
+# Legally required traffic records (ADR 0009). The key is set per environment.
+config :nosilence, Nosilence.TrafficLog, retention_days: 365
+
+# Nightly clean-up of expired data (ADR 0009).
+config :nosilence, Nosilence.Retention,
+  enabled: true,
+  interval_ms: 24 * 60 * 60_000,
+  # Invites that expired, were revoked or used up are kept this long, then deleted.
+  stale_invite_days: 30
+
+# Rate limits: {hits, window in ms} per key (ADR 0009).
+config :nosilence, Nosilence.RateLimit,
+  # per email address, and per IP address
+  sign_in_email: {5, 60_000},
+  sign_in_ip: {20, 60_000},
+  # emails sent to one address (confirmation, password reset)
+  email_address: {3, 60 * 60_000},
+  # requests that send email, per IP address
+  email_ip: {20, 60 * 60_000},
+  # messages per user
+  message: {10, 10_000}
+
 # Text messages (limits are configuration, see docs/ROADMAP.md rule 6).
 config :nosilence, Nosilence.Messaging, max_message_length: 2000, page_size: 50
 

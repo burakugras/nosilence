@@ -61,6 +61,10 @@ if config_env() == :prod do
     app_url: System.fetch_env!("APP_URL"),
     secure_cookies: true
 
+  # 32 random bytes, base64. Generate: elixir -e "IO.puts Base.encode64(:crypto.strong_rand_bytes(32))"
+  # Keep it out of the database host's backups; losing it makes old records unreadable.
+  config :nosilence, Nosilence.TrafficLog, key: System.fetch_env!("TRAFFIC_LOG_KEY")
+
   config :nosilence, Nosilence.Accounts.Google,
     client_id: System.get_env("GOOGLE_CLIENT_ID"),
     client_secret: System.get_env("GOOGLE_CLIENT_SECRET")

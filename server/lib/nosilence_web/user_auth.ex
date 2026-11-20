@@ -50,6 +50,13 @@ defmodule NosilenceWeb.UserAuth do
 
   def desktop_origins, do: Application.get_env(:nosilence, :desktop_origins, [])
 
+  @doc "Records a sign-in in the legally required traffic log (IP address and port)."
+  def log_sign_in(conn, user) do
+    %{address: ip, port: port} = get_peer_data(conn)
+    Nosilence.TrafficLog.record(user.id, "sign_in", {ip, port})
+    conn
+  end
+
   def require_authenticated(%{assigns: %{current_user: %{}}} = conn, _opts), do: conn
 
   def require_authenticated(conn, _opts) do

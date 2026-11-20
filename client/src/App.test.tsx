@@ -21,7 +21,8 @@ describe('App', () => {
   it('shows the user’s communities when signed in', async () => {
     render(<App loadUser={() => Promise.resolve(user)} />)
     expect(await screen.findByRole('link', { name: 'Ekip' })).toHaveAttribute('href', '/c/c1')
-    expect(screen.getByText(/Burak/, { selector: 'header p' })).toBeInTheDocument()
+    // The name in the header leads to the account page.
+    expect(screen.getByRole('link', { name: 'Burak' })).toHaveAttribute('href', '/account')
   })
 
   it('opens the register page from its link', async () => {

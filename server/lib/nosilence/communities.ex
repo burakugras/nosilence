@@ -275,6 +275,85 @@ defmodule Nosilence.Communities do
     end
   end
 
+  ## Account deletion and export (used by Nosilence.Privacy)
+
+  @doc "Communities the user owns, with how many members each has."
+  def owned_communities(%User{id: user_id}) do
+    Repo.all(
+      from c in Community,
+        join: m in Membership,
+        on: m.community_id == c.id and m.user_id == ^user_id and m.role == "owner",
+        join: all in Membership,
+        on: all.community_id == c.id,
+        group_by: c.id,
+        order_by: c.name,
+        select: %{id: c.id, name: c.name, member_count: count(all.id)}
+    )
+  end
+
+  @doc "The user's memberships, for their data export."
+  def memberships_of(%User{id: user_id}) do
+    Repo.all(
+      from m in Membership,
+        join: c in assoc(m, :community),
+        where: m.user_id == ^user_id,
+        order_by: m.inserted_at,
+        select: %{community: c.name, role: m.role, joined_at: m.inserted_at}
+    )
+  end
+
+  @doc "Invites the user created, for their data export."
+  def invites_created_by(%User{id: user_id}) do
+    Repo.all(
+      from i in Invite,
+        join: c in Community,
+        on: c.id == i.community_id,
+        where: i.created_by_id == ^user_id,
+        order_by: i.inserted_at,
+        select: %{
+          community: c.name,
+          created_at: i.inserted_at,
+          expires_at: i.expires_at,
+          uses: i.uses
+        }
+    )
+  end
+
+  @doc "Ids of the voice channels (LiveKit rooms) of the communities the user is in."
+  def voice_rooms_of(%User{id: user_id}) do
+    Repo.all(
+      from ch in Channel,
+        join: m in Membership,
+        on: m.community_id == ch.community_id and m.user_id == ^user_id,
+        where: ch.kind == "voice",
+        select: ch.id
+    )
+  end
+
+  @doc "Ids of the communities the user is a member of (not owner)."
+  def member_community_ids(%User{id: user_id}) do
+    Repo.all(
+      from m in Membership,
+        where: m.user_id == ^user_id and m.role != "owner",
+        select: m.community_id
+    )
+  end
+
+  @doc "Deletes invites that expired, were revoked or used up more than `days` ago."
+  def delete_stale_invites(days) do
+    cutoff = DateTime.add(DateTime.utc_now(:second), -days, :day)
+
+    {count, _} =
+      Repo.delete_all(
+        from i in Invite,
+          where:
+            i.expires_at < ^cutoff or i.revoked_at < ^cutoff or
+              (not is_nil(i.max_uses) and i.uses >= i.max_uses and i.inserted_at < ^cutoff)
+      )
+
+    count
+  end
+
   defp find_active_invite(token) when is_binary(token) do
     case Base.url_decode64(token, padding: false) do
       {:ok, raw} when byte_size(raw) == 32 ->
