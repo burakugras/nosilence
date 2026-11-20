@@ -23,6 +23,7 @@ import { MlsKeyProvider } from '../e2ee/keyProvider'
 import { loadMls } from '../e2ee/mls'
 import { VoiceSession, type E2eeStatus } from '../e2ee/session'
 import { openVoiceTopic } from '../gateway/phoenixGateway'
+import { beforeQuit } from '../platform'
 import type { OpenVoiceTopic } from '../gateway/types'
 import { summariseInbound, type InboundAudioSample, type InboundAudioSummary } from './stats'
 
@@ -96,6 +97,9 @@ export function VoiceRoom({
       session?.stop()
     }
   }, [room, keyProvider, channelId, join.identity, openTopic])
+
+  // Quitting the desktop app: say goodbye to LiveKit so others see us leave at once.
+  useEffect(() => beforeQuit(() => room.disconnect()), [room])
 
   // Never stay connected without encryption.
   const ended = status.state === 'ended'

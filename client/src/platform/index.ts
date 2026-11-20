@@ -45,6 +45,28 @@ export async function clearSessionToken() {
   await invoke('clear_token').catch(() => undefined)
 }
 
+const quitHandlers = new Set<() => Promise<unknown>>()
+let quitListener: Promise<unknown> | undefined
+
+/**
+ * Desktop app: runs `handler` before the app quits from the tray (for example to
+ * leave a call cleanly). Returns a function that removes it. No-op on the web,
+ * where the browser handles closing tabs.
+ */
+export function beforeQuit(handler: () => Promise<unknown>): () => void {
+  if (!isDesktop) return () => {}
+  quitHandlers.add(handler)
+  quitListener ??= import('@tauri-apps/api/event').then(({ listen }) =>
+    listen('quit-requested', async () => {
+      await Promise.allSettled([...quitHandlers].map((h) => h()))
+      await invoke('quit_now')
+    }),
+  )
+  return () => {
+    quitHandlers.delete(handler)
+  }
+}
+
 export type DesktopGoogleResult = { code: string; verifier: string } | { error: string }
 
 /**

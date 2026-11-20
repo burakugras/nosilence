@@ -42,7 +42,9 @@ first-time Google user finishes signing up in the browser and then signs in agai
 app.
 
 **Installer: NSIS, per user (option 3A).** No administrator rights. System tray: closing
-the window hides it, so a call continues; the tray menu shows the window or quits.
+the window hides it, so a call continues; the tray menu shows the window or quits. Quitting
+first lets the client leave the call cleanly (at most 1.5 s), so others see the user go at
+once instead of after LiveKit's connection timeout (measured: 35 ms instead of 4-5 s).
 
 **Push-to-talk is deferred** (Burak, 2026-11-20). Tauri's global shortcut takes the key away
 from other apps; a listening keyboard hook does not, also allows mouse buttons, but may be
@@ -54,6 +56,8 @@ flagged by antivirus software. The method is decided later.
   (no session cookie), joins an encrypted call with a Chrome user (same verification code,
   both hear each other), and removes the token on sign-out.
 - CI compiles, lints and tests the desktop shell on Windows.
+- SmartScreen only warns for files downloaded from the internet (marked by Windows); a
+  locally built installer shows no warning.
 - Deferred: code signing (SmartScreen warns until then) and automatic updates (both need
   phase 8 hosting), push-to-talk, first Google sign-up inside the app, the macOS check.
 - The development server address in `client/.env.desktop` and the CSP in

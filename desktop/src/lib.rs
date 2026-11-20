@@ -14,13 +14,15 @@ use sha2::{Digest, Sha256};
 use std::time::Duration;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
 const KEYRING_SERVICE: &str = "app.nosilence.desktop";
 const KEYRING_USER: &str = "session";
 const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+/// How long the client may take to leave a call cleanly before the app quits anyway.
+const QUIT_GRACE: Duration = Duration::from_millis(1500);
 
 fn token_entry() -> Result<keyring::Entry, String> {
     keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER).map_err(|e| e.to_string())
@@ -184,6 +186,23 @@ fn same_host(url: &str, api_origin: &str) -> bool {
     !url.contains(['\r', '\n']) && host(url).is_some() && host(url) == host(api_origin)
 }
 
+/// Quit from the tray: let the client leave a call cleanly first (so the others
+/// see us go at once instead of after LiveKit's timeout), then exit.
+#[tauri::command]
+fn request_quit(app: AppHandle) {
+    let _ = app.emit("quit-requested", ());
+    std::thread::spawn(move || {
+        std::thread::sleep(QUIT_GRACE);
+        app.exit(0);
+    });
+}
+
+/// The client finished cleaning up.
+#[tauri::command]
+fn quit_now(app: AppHandle) {
+    app.exit(0);
+}
+
 fn show_main(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
@@ -199,7 +218,9 @@ pub fn run() {
             load_token,
             store_token,
             clear_token,
-            google_sign_in
+            google_sign_in,
+            request_quit,
+            quit_now
         ])
         .setup(|app| {
             let show = MenuItem::with_id(app, "show", "Show Nosilence", true, None::<&str>)?;
@@ -212,7 +233,7 @@ pub fn run() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => show_main(app),
-                    "quit" => app.exit(0),
+                    "quit" => request_quit(app.clone()),
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
