@@ -89,8 +89,13 @@ describe('TextChannel scrolling', () => {
     expect(second).toHaveClass('first-unseen')
 
     // On screen: the tint fades and the read position moves to message 2.
-    act(() => vi.advanceTimersByTime(1_600))
+    // The browser reports the opening scroll as a scroll event: it changes nothing.
+    fireEvent.scroll(list)
+    expect(second).toHaveClass('unseen')
+    act(() => vi.advanceTimersByTime(3_100))
     expect(second).not.toHaveClass('unseen')
+    // The "New" line stays to show where the reader stopped.
+    expect(second).toHaveClass('first-unseen')
     act(() => vi.advanceTimersByTime(1_000))
     expect(marked).toEqual(['m002'])
     expect(list).toBeInTheDocument()
@@ -149,7 +154,7 @@ describe('TextChannel scrolling', () => {
     expect(screen.getByRole('button', { name: '1 new message ↓' })).toBeInTheDocument()
   })
 
-  it('scrolling down to the bottom clears the strip and the mark', async () => {
+  it('scrolling down to the bottom clears the strip and the tint, the line stays', async () => {
     const { list, emit } = await setup()
     list.scrollTop = 0
     fireEvent.scroll(list)
@@ -159,7 +164,7 @@ describe('TextChannel scrolling', () => {
     list.scrollTop = 200
     fireEvent.scroll(list)
     expect(screen.queryByRole('button', { name: /new message/ })).toBeNull()
-    expect(screen.getByText('message 3').closest('li')).not.toHaveClass('first-unseen')
+    expect(screen.getByText('message 3').closest('li')).toHaveClass('first-unseen')
     expect(screen.getByText('message 3').closest('li')).not.toHaveClass('unseen')
   })
 

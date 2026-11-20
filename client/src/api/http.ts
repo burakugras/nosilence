@@ -29,6 +29,8 @@ type Options = {
   method?: 'GET' | 'POST' | 'DELETE'
   body?: unknown
   fetchFn?: typeof fetch
+  /** Let the request finish even if the page is closing. */
+  keepalive?: boolean
 }
 
 /**
@@ -37,12 +39,13 @@ type Options = {
  * it. The desktop app sends its stored token as a bearer header instead.
  */
 export async function request<T>(path: string, options: Options = {}): Promise<T> {
-  const { method = 'GET', body, fetchFn = fetch } = options
+  const { method = 'GET', body, fetchFn = fetch, keepalive } = options
   const token = await sessionToken()
   let response: Response
   try {
     response = await fetchFn(apiOrigin + path, {
       method,
+      keepalive,
       credentials: isDesktop ? 'omit' : 'same-origin',
       headers: {
         accept: 'application/json',

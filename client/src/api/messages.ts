@@ -36,6 +36,8 @@ export const markRead = (channelId: string, messageId: string) =>
   request<void>(`/api/channels/${channelId}/read`, {
     method: 'POST',
     body: { message_id: messageId },
+    // Often sent while leaving the channel or closing the page.
+    keepalive: true,
   })
 
 export const deleteMessage = (id: string) =>

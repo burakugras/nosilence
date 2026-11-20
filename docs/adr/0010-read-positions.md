@@ -24,10 +24,15 @@ from a database sequence; pages, cursors, read positions and unread counts use i
 
 **Opening a channel** starts at the first message after the read position. From there
 on, messages from others are new: marked with the "New" line, tinted until they have
-been on screen (those visible at once fade after a moment), counted by the strip.
-If more than one page is unread, the strip shows "50+". As messages are seen the
-client saves the position (the newest message before the first one still unseen),
-at most once per short pause. While the page is hidden, nothing counts as seen.
+been on screen (those visible at once keep the tint for 3 seconds; scroll events
+caused by opening do not count), counted by the strip. The "New" line stays while the
+channel is open. If more than one page is unread, the strip shows "50+".
+The position saved on the server is the newest message before the first one the
+reader has not had on screen; messages visible now count as read even while their
+tint still shows. It is saved a moment after it moves, and at once when the channel
+is left or the page is hidden or closed (keepalive request). While the page is
+hidden, nothing counts as seen. (A real-browser check found that tying the save to
+the tint lost the position when someone read quickly and left.)
 
 **Channel list.** Each text channel shows its unread count from the server on load
 (counted up to 100, shown as "99+"), counted live for channels not on screen; the open

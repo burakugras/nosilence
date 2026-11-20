@@ -23,10 +23,8 @@ import type { CommunityLive } from '../gateway/useCommunityLive'
 import { merge, reconcile, type History } from './messageHistory'
 import { MAX_MESSAGE, messageError } from '../validation'
 
-/** Within this many pixels of the bottom counts as "reading the latest". */
-const NEAR_BOTTOM_PX = 80
 /** Unread messages already on screen when the channel opens stay tinted this long. */
-const OPENING_TINT_MS = 1500
+const OPENING_TINT_MS = 3000
 /** Wait this long after reading before saving the position (fewer requests). */
 const SAVE_READ_MS = 800
 
@@ -88,7 +86,10 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
   const firstId = messages?.[0]?.id
   const lastId = messages?.[messages.length - 1]?.id
 
-  /** Messages that have now been on screen are no longer unseen. */
+  /**
+   * Messages that have now been on screen are no longer unseen. Each one
+   * counts only once it was actually visible; the "New" line stays where it is.
+   */
   const markSeen = useCallback(() => {
     const el = list.current
     if (!el) return
@@ -96,12 +97,17 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
       const left = ids.filter((id) => !inSight(el, id))
       return left.length === ids.length ? ids : left
     })
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX) {
-      setUnseenIds([])
-      setFirstUnseenId(undefined)
-      setMoreUnreadAbove(false)
-    }
   }, [])
+
+  // Scrolling the list from code (when the channel opens) also fires scroll
+  // events; until this time they are not the reader's and change nothing.
+  const quietUntil = useRef(0)
+  function onScroll() {
+    if (performance.now() >= quietUntil.current) markSeen()
+  }
+
+  // "50+" only while something is still unseen.
+  const moreAbove = moreUnreadAbove && unseenIds.length > 0
 
   /** Scrolls so the first message the reader has not seen is at the top. */
   function jumpToFirstUnseen() {
@@ -132,29 +138,35 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
       setUnseenIds(unread.map((m) => m.id))
       setFirstUnseenId(unread[0].id)
       setMoreUnreadAbove(hasMore && (readSeq === undefined || readSeq < messages[0].seq))
-      // Those already on screen fade to normal after a moment.
+      // Those already on screen fade to normal after a moment, not at once.
+      quietUntil.current = performance.now() + OPENING_TINT_MS
       window.setTimeout(markSeen, OPENING_TINT_MS)
     }
   }, [messages, hasMore, currentUserId, markSeen])
 
+  const noneUnseen = unseenIds.length === 0
   useLayoutEffect(() => {
     const el = list.current
     if (!el) return
     const arrived = incoming.current
     incoming.current = []
     if (scrollToEnd.current) {
+      // The reader sent a message: they are up to date.
       scrollToEnd.current = false
       el.scrollTop = el.scrollHeight
+      setUnseenIds([])
+      setFirstUnseenId(undefined)
       return
     }
     // Only messages that landed out of sight count as unseen (and all of them
     // while the page is in the background).
     const outOfSight = arrived.filter((id) => item(el, id) && (document.hidden || !inSight(el, id)))
     if (outOfSight.length > 0) {
+      // A new batch after everything was seen moves the "New" line to it.
+      if (noneUnseen) setFirstUnseenId(outOfSight[0])
       setUnseenIds((ids) => [...ids, ...outOfSight])
-      setFirstUnseenId((id) => id ?? outOfSight[0])
     }
-  }, [lastId])
+  }, [lastId, noneUnseen])
 
   useLayoutEffect(() => {
     const el = list.current
@@ -205,24 +217,47 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
     [subscribe, channel.id, currentUserId],
   )
 
-  // Save the read position: the newest message before the first one still
-  // unseen (or the newest of all), a moment after it was reached.
+  // Save the read position: the newest message before the first one the reader
+  // has not had on screen yet. Messages visible right now count as read even
+  // while their tint still shows. Saved a moment after it was reached, and at
+  // once when the channel is left or the page is hidden or closed.
+  const pendingRead = useRef<Message>(undefined)
+  const flushRead = useCallback(() => {
+    const target = pendingRead.current
+    pendingRead.current = undefined
+    if (!target || target.seq <= savedSeq.current) return
+    savedSeq.current = target.seq
+    markRead(channel.id, target.id).catch(() => undefined)
+  }, [channel.id])
+
   useEffect(() => {
-    if (!messages?.length) return
+    const el = list.current
+    if (!messages?.length || opening.current) return
     const unseen = new Set(unseenIds)
     let target: Message | undefined
     for (const m of messages) {
-      if (unseen.has(m.id)) break
+      if (unseen.has(m.id) && !(el && !document.hidden && inSight(el, m.id))) break
       target = m
     }
-    if (!target || target.seq <= savedSeq.current || opening.current) return
-    const reached = target
-    const timer = window.setTimeout(() => {
-      savedSeq.current = reached.seq
-      markRead(channel.id, reached.id).catch(() => undefined)
-    }, SAVE_READ_MS)
+    if (!target || target.seq <= savedSeq.current) return
+    pendingRead.current = target
+    const timer = window.setTimeout(flushRead, SAVE_READ_MS)
     return () => window.clearTimeout(timer)
-  }, [messages, unseenIds, channel.id])
+  }, [messages, unseenIds, flushRead])
+
+  useEffect(() => {
+    const onHide = () => {
+      if (document.hidden) flushRead()
+    }
+    document.addEventListener('visibilitychange', onHide)
+    window.addEventListener('pagehide', flushRead)
+    return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      window.removeEventListener('pagehide', flushRead)
+      // Leaving the channel (or the page): save what was read.
+      flushRead()
+    }
+  }, [flushRead])
 
   // The channel list shows how many are still unread here.
   const unreadCount = unseenIds.length
@@ -313,7 +348,7 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
         <p className="muted">No messages yet. Say hello!</p>
       ) : (
         <div className="messages-wrap">
-          <ol className="messages" aria-label="Messages" ref={list} onScroll={markSeen}>
+          <ol className="messages" aria-label="Messages" ref={list} onScroll={onScroll}>
             {messages.map((m) => (
               <li
                 key={m.id}
@@ -347,9 +382,9 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
           </ol>
           {unseenIds.length > 0 && (
             <button type="button" className="new-messages" onClick={jumpToFirstUnseen}>
-              {unseenIds.length === 1 && !moreUnreadAbove
+              {unseenIds.length === 1 && !moreAbove
                 ? '1 new message'
-                : `${unseenIds.length}${moreUnreadAbove ? '+' : ''} new messages`}{' '}
+                : `${unseenIds.length}${moreAbove ? '+' : ''} new messages`}{' '}
               ↓
             </button>
           )}
