@@ -10,6 +10,7 @@ import {
 import { ApiError } from '../api/http'
 import { deleteMessage, listMessages, sendMessage, type Message } from '../api/messages'
 import { FormMessage } from '../components/Field'
+import { formatWait, useCountdown, withoutWait } from '../components/useCountdown'
 import type { CommunityLive } from '../gateway/useCommunityLive'
 import { merge, reconcile, type History } from './messageHistory'
 import { MAX_MESSAGE, messageError } from '../validation'
@@ -41,8 +42,13 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
   const list = useRef<HTMLOListElement>(null)
   const atBottom = useRef(true)
   const heightBeforeOlder = useRef<number>(undefined)
-  // Messages from others that arrived while the reader was further up.
+  // Messages from others that arrived while the reader was further up, and the
+  // first of them (marked with a "New" line, where the strip takes the reader).
   const [unseen, setUnseen] = useState(0)
+  const [firstUnseenId, setFirstUnseenId] = useState<string>()
+  // Sending too fast: a live countdown; sending stays off until it ends.
+  const wait = useCountdown()
+  const [waitReason, setWaitReason] = useState<string>()
   const firstId = messages?.[0]?.id
   const lastId = messages?.[messages.length - 1]?.id
 
@@ -50,13 +56,17 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
     const el = list.current
     if (!el) return
     atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX
-    if (atBottom.current) setUnseen(0)
+    if (atBottom.current) {
+      setUnseen(0)
+      setFirstUnseenId(undefined)
+    }
   }
 
-  function jumpToLatest() {
+  /** Scrolls so the first message the reader has not seen is at the top. */
+  function jumpToFirstUnseen() {
     const el = list.current
-    if (el) el.scrollTop = el.scrollHeight
-    atBottom.current = true
+    const first = el?.querySelector<HTMLElement>(`[data-message-id="${firstUnseenId}"]`)
+    if (el && first) el.scrollTop = first.offsetTop - el.offsetTop
     setUnseen(0)
   }
 
@@ -89,8 +99,10 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
       subscribe((event) => {
         if (event.type === 'message_created' && event.message.channel_id === channel.id) {
           update((ms) => merge(ms, [event.message]))
-          if (!atBottom.current && event.message.author?.id !== currentUserId)
+          if (!atBottom.current && event.message.author?.id !== currentUserId) {
             setUnseen((n) => n + 1)
+            setFirstUnseenId((id) => id ?? event.message.id)
+          }
         }
         if (event.type === 'message_deleted' && event.channel_id === channel.id)
           update((ms) => ms.filter((m) => m.id !== event.id))
@@ -121,6 +133,7 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
 
   async function send(event?: FormEvent) {
     event?.preventDefault()
+    if (wait.secondsLeft > 0) return
     const error = messageError(text)
     if (error) return setMessage(error)
     setSending(true)
@@ -132,6 +145,12 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
       update((ms) => merge(ms, [sent]))
       setText('')
     } catch (e) {
+      if (e instanceof ApiError && e.retryAfter) {
+        // Keep the text; show a countdown instead of an error that goes stale.
+        wait.start(e.retryAfter)
+        setWaitReason(withoutWait(e.message))
+        return
+      }
       setMessage(
         e instanceof ApiError ? (e.field('text') ?? e.message) : 'Could not send the message.',
       )
@@ -174,7 +193,11 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
         <div className="messages-wrap">
           <ol className="messages" aria-label="Messages" ref={list} onScroll={onScroll}>
             {messages.map((m) => (
-              <li key={m.id}>
+              <li
+                key={m.id}
+                data-message-id={m.id}
+                className={m.id === firstUnseenId ? 'first-unseen' : undefined}
+              >
                 <div className="message-head">
                   <strong>{m.author?.display_name ?? 'Deleted user'}</strong>{' '}
                   <time className="muted" dateTime={m.inserted_at}>
@@ -197,7 +220,7 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
             ))}
           </ol>
           {unseen > 0 && (
-            <button type="button" className="new-messages" onClick={jumpToLatest}>
+            <button type="button" className="new-messages" onClick={jumpToFirstUnseen}>
               {unseen === 1 ? '1 new message' : `${unseen} new messages`} ↓
             </button>
           )}
@@ -212,11 +235,17 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
         />
-        <button type="submit" disabled={sending}>
+        <button type="submit" disabled={sending || wait.secondsLeft > 0}>
           Send
         </button>
       </form>
-      <FormMessage text={message} />
+      <FormMessage
+        text={
+          wait.secondsLeft > 0
+            ? `${waitReason} You can send again in ${formatWait(wait.secondsLeft)}.`
+            : message
+        }
+      />
     </section>
   )
 }

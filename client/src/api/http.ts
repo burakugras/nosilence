@@ -7,12 +7,15 @@ export type FieldErrors = Record<string, string[] | string>
 export class ApiError extends Error {
   readonly status: number
   readonly fieldErrors: FieldErrors
+  /** Seconds to wait before trying again (429 responses carry `Retry-After`). */
+  readonly retryAfter?: number
 
-  constructor(message: string, status: number, fieldErrors: FieldErrors = {}) {
+  constructor(message: string, status: number, fieldErrors: FieldErrors = {}, retryAfter?: number) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.fieldErrors = fieldErrors
+    this.retryAfter = retryAfter
   }
 
   /** First message for a field, or undefined. */
@@ -63,7 +66,8 @@ export async function request<T>(path: string, options: Options = {}): Promise<T
   if (!response.ok) {
     const message =
       data.error ?? (data.errors ? 'Please check the form.' : `Server error ${response.status}.`)
-    throw new ApiError(message, response.status, data.errors ?? {})
+    const retryAfter = Number(response.headers.get('retry-after')) || undefined
+    throw new ApiError(message, response.status, data.errors ?? {}, retryAfter)
   }
   return data
 }

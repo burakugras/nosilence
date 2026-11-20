@@ -19,8 +19,15 @@ vi.mock('../api/messages', () => ({
   deleteMessage: () => Promise.resolve(),
 }))
 
-// jsdom has no layout: give the list a fixed size that grows with each message.
+// jsdom has no layout: give the list a fixed size that grows with each message,
+// and each message a position 100 px below the previous one.
 function fakeLayout(el: HTMLElement) {
+  Object.defineProperty(HTMLElement.prototype, 'offsetTop', {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.tagName === 'LI' ? [...this.parentElement!.children].indexOf(this) * 100 : 0
+    },
+  })
   Object.defineProperty(el, 'clientHeight', { configurable: true, value: 100 })
   Object.defineProperty(el, 'scrollHeight', {
     configurable: true,
@@ -66,10 +73,13 @@ describe('TextChannel scrolling', () => {
     emit({ type: 'message_created', message: msg(4) })
     expect(screen.getByRole('button', { name: '2 new messages ↓' })).toBeInTheDocument()
 
-    // Jumping to the latest clears it.
+    // The first unseen message is marked; the strip takes the reader there, not to the end.
+    const first = screen.getByText('message 3').closest('li')!
+    expect(first).toHaveClass('first-unseen')
     fireEvent.click(screen.getByRole('button', { name: '2 new messages ↓' }))
-    expect(list.scrollTop).toBe(400)
+    expect(list.scrollTop).toBe(200)
     expect(screen.queryByRole('button', { name: /new message/ })).toBeNull()
+    expect(first).toHaveClass('first-unseen')
   })
 
   it('scrolling down to the bottom clears the strip', async () => {
