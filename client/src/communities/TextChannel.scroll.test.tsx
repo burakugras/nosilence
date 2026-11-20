@@ -57,12 +57,30 @@ describe('TextChannel scrolling', () => {
     expect(list.scrollTop).toBe(300)
   })
 
-  it('leaves the view alone while the reader is further up', async () => {
+  it('leaves the view alone while the reader is further up, and says what is new', async () => {
     const { list, emit } = await setup()
     list.scrollTop = 0
     fireEvent.scroll(list)
     emit({ type: 'message_created', message: msg(3) })
     expect(list.scrollTop).toBe(0)
+    emit({ type: 'message_created', message: msg(4) })
+    expect(screen.getByRole('button', { name: '2 new messages ↓' })).toBeInTheDocument()
+
+    // Jumping to the latest clears it.
+    fireEvent.click(screen.getByRole('button', { name: '2 new messages ↓' }))
+    expect(list.scrollTop).toBe(400)
+    expect(screen.queryByRole('button', { name: /new message/ })).toBeNull()
+  })
+
+  it('scrolling down to the bottom clears the strip', async () => {
+    const { list, emit } = await setup()
+    list.scrollTop = 0
+    fireEvent.scroll(list)
+    emit({ type: 'message_created', message: msg(3) })
+    expect(screen.getByRole('button', { name: '1 new message ↓' })).toBeInTheDocument()
+    list.scrollTop = 200
+    fireEvent.scroll(list)
+    expect(screen.queryByRole('button', { name: /new message/ })).toBeNull()
   })
 
   it('always goes to the bottom after sending', async () => {

@@ -41,12 +41,23 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
   const list = useRef<HTMLOListElement>(null)
   const atBottom = useRef(true)
   const heightBeforeOlder = useRef<number>(undefined)
+  // Messages from others that arrived while the reader was further up.
+  const [unseen, setUnseen] = useState(0)
   const firstId = messages?.[0]?.id
   const lastId = messages?.[messages.length - 1]?.id
 
   function onScroll() {
     const el = list.current
-    if (el) atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX
+    if (!el) return
+    atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX
+    if (atBottom.current) setUnseen(0)
+  }
+
+  function jumpToLatest() {
+    const el = list.current
+    if (el) el.scrollTop = el.scrollHeight
+    atBottom.current = true
+    setUnseen(0)
   }
 
   useLayoutEffect(() => {
@@ -76,8 +87,11 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
   useEffect(
     () =>
       subscribe((event) => {
-        if (event.type === 'message_created' && event.message.channel_id === channel.id)
+        if (event.type === 'message_created' && event.message.channel_id === channel.id) {
           update((ms) => merge(ms, [event.message]))
+          if (!atBottom.current && event.message.author?.id !== currentUserId)
+            setUnseen((n) => n + 1)
+        }
         if (event.type === 'message_deleted' && event.channel_id === channel.id)
           update((ms) => ms.filter((m) => m.id !== event.id))
         // A deleted account: its messages go, or stay as from "Deleted user".
@@ -88,7 +102,7 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
               : ms.map((m) => (m.author?.id === event.user_id ? { ...m, author: null } : m)),
           )
       }),
-    [subscribe, channel.id],
+    [subscribe, channel.id, currentUserId],
   )
 
   async function loadOlder() {
@@ -157,30 +171,37 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
       ) : messages.length === 0 ? (
         <p className="muted">No messages yet. Say hello!</p>
       ) : (
-        <ol className="messages" aria-label="Messages" ref={list} onScroll={onScroll}>
-          {messages.map((m) => (
-            <li key={m.id}>
-              <div className="message-head">
-                <strong>{m.author?.display_name ?? 'Deleted user'}</strong>{' '}
-                <time className="muted" dateTime={m.inserted_at}>
-                  {new Date(m.inserted_at).toLocaleString()}
-                </time>
-                {(canDeleteAny || m.author?.id === currentUserId) && (
-                  <button
-                    type="button"
-                    className="link-button"
-                    aria-label="Delete message"
-                    onClick={() => void remove(m)}
-                  >
-                    Delete
-                  </button>
-                )}
-              </div>
-              {/* Rendered as text, never as HTML. */}
-              <p className="message-text">{m.text}</p>
-            </li>
-          ))}
-        </ol>
+        <div className="messages-wrap">
+          <ol className="messages" aria-label="Messages" ref={list} onScroll={onScroll}>
+            {messages.map((m) => (
+              <li key={m.id}>
+                <div className="message-head">
+                  <strong>{m.author?.display_name ?? 'Deleted user'}</strong>{' '}
+                  <time className="muted" dateTime={m.inserted_at}>
+                    {new Date(m.inserted_at).toLocaleString()}
+                  </time>
+                  {(canDeleteAny || m.author?.id === currentUserId) && (
+                    <button
+                      type="button"
+                      className="link-button"
+                      aria-label="Delete message"
+                      onClick={() => void remove(m)}
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+                {/* Rendered as text, never as HTML. */}
+                <p className="message-text">{m.text}</p>
+              </li>
+            ))}
+          </ol>
+          {unseen > 0 && (
+            <button type="button" className="new-messages" onClick={jumpToLatest}>
+              {unseen === 1 ? '1 new message' : `${unseen} new messages`} ↓
+            </button>
+          )}
+        </div>
       )}
       <form className="composer" onSubmit={(e) => void send(e)} aria-label="Send a message">
         <textarea

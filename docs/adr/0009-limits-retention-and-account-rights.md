@@ -12,13 +12,18 @@ written yet; users could not download or delete their data.
 
 ## Decision
 
-**Rate limits in memory (option 1A).** `Nosilence.RateLimit` keeps fixed-window
-counters in ETS: sign-in 5 per email address and 20 per IP address a minute; at most
-3 emails per address and 20 email-sending requests per IP address an hour; 10 messages
-per user in 10 seconds. Limits are configuration. Over the limit the API answers 429
-with `Retry-After`, except for the per-address email limit, where the answer stays the
-same and nothing is sent, so responses never reveal whether an account exists. Counters
-are lost on restart and are per server; several servers will need a shared store.
+**Rate limits in memory (option 1A), sliding window with a pause (option B).**
+`Nosilence.RateLimit` counts hits per key over the last `window` milliseconds (not
+clock-aligned buckets, which let bursts double up at a boundary and sometimes made the
+wait only a second or two). Sign-in: 5 per email address and 20 per IP address a minute;
+going over blocks for 1 minute, 15 minutes if it happens again within an hour. Messages:
+10 per user in 10 seconds; going over pauses sending for 30 seconds, 2 minutes if it
+happens again within 5 minutes. Emails: at most 3 per address and 20 email-sending
+requests per IP address an hour. Limits are configuration. Over the limit the API
+answers 429 with `Retry-After` and a plain message ("You are sending messages too fast.
+Try again in 30 seconds."), except for the per-address email limit, where the answer
+stays the same and nothing is sent, so responses never reveal whether an account exists.
+State is lost on restart and is per server; several servers will need a shared store.
 
 **Traffic records, encrypted in the application (option 2A).** `Nosilence.TrafficLog`
 records sign-ins (password, Google on the web and in the desktop app) and gateway

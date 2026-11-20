@@ -47,7 +47,7 @@ defmodule Nosilence.Messaging do
   def send_message(%User{} = user, channel_id, text) do
     with {:ok, channel, _} <- text_channel(user, channel_id, :send_message),
          {:ok, text} <- validate_text(text),
-         :ok <- Nosilence.RateLimit.hit(:message, user.id) do
+         :ok <- message_allowed(user) do
       # `log: false`: the query log would print the content as a parameter.
       message =
         Repo.insert!(%Message{channel_id: channel.id, author_id: user.id, content: text},
@@ -57,6 +57,13 @@ defmodule Nosilence.Messaging do
 
       Events.broadcast(channel.community_id, "message_created", to_payload(message))
       {:ok, message}
+    end
+  end
+
+  defp message_allowed(user) do
+    case Nosilence.RateLimit.hit(:message, user.id) do
+      :ok -> :ok
+      {:error, :rate_limited, ms} -> {:error, :sending_too_fast, ms}
     end
   end
 

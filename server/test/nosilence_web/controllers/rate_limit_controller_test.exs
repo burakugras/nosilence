@@ -23,7 +23,9 @@ defmodule NosilenceWeb.RateLimitControllerTest do
       json_conn()
       |> post(~p"/api/session", %{email: String.upcase(user.email), password: valid_password()})
 
-    assert %{"error" => "too many attempts" <> _} = json_response(conn, 429)
+    assert %{"error" => "Too many sign-in attempts. Try again in " <> _} =
+             json_response(conn, 429)
+
     assert [seconds] = get_resp_header(conn, "retry-after")
     assert String.to_integer(seconds) in 1..60
   end
@@ -46,7 +48,7 @@ defmodule NosilenceWeb.RateLimitControllerTest do
     refute_email_sent()
   end
 
-  test "messages: ten per user in ten seconds" do
+  test "messages: ten per user in ten seconds, then a 30 second pause" do
     owner = confirmed_user_fixture()
     %{text_channel: ch} = community_fixture(owner)
     token = Accounts.create_session(owner)
@@ -59,7 +61,11 @@ defmodule NosilenceWeb.RateLimitControllerTest do
     end
 
     conn = authed.() |> post(~p"/api/channels/#{ch.id}/messages", %{text: "one more"})
-    assert json_response(conn, 429)
+
+    assert %{"error" => "You are sending messages too fast. Try again in 30 seconds."} =
+             json_response(conn, 429)
+
+    assert get_resp_header(conn, "retry-after") == ["30"]
   end
 
   defp flush_emails do

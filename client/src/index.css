@@ -315,3 +315,24 @@ body {
   gap: 0.5rem;
   align-items: center;
 }
+
+/* "New messages" strip at the bottom of a scrolled-up message list */
+.messages-wrap {
+  position: relative;
+}
+
+.new-messages {
+  position: absolute;
+  left: 50%;
+  bottom: 0.5rem;
+  transform: translateX(-50%);
+  padding: 0.25rem 0.9rem;
+  border: none;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.9em;
+  color: #fff;
+  background: #4f46e5;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 25%);
+  cursor: pointer;
+}

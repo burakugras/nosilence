@@ -9,8 +9,8 @@ defmodule NosilenceWeb.FallbackController do
     |> json(NosilenceWeb.ChangesetJSON.errors(changeset))
   end
 
-  def call(conn, {:error, :rate_limited, retry_after_ms}),
-    do: NosilenceWeb.RateLimited.too_many(conn, retry_after_ms)
+  def call(conn, {:error, :sending_too_fast, retry_after_ms}),
+    do: NosilenceWeb.RateLimited.too_many(conn, retry_after_ms, :message)
 
   def call(conn, {:error, :not_found}), do: error(conn, :not_found, "not found")
   def call(conn, {:error, :forbidden}), do: error(conn, :forbidden, "not allowed")
