@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useState, type FormEvent } from 'react'
-import { register } from '../api/accounts'
+import { register, type User } from '../api/accounts'
 import { Field, FormMessage } from '../components/Field'
 import { Link } from '../components/Link'
 import { collect, displayNameError, emailError, MIN_PASSWORD, passwordError } from '../validation'
 import { GoogleButton } from './GoogleButton'
 import { useSubmit } from './useSubmit'
 
-export function RegisterPage() {
+export function RegisterPage({ onSignedIn }: { onSignedIn?: (user: User) => void }) {
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
@@ -52,7 +52,7 @@ export function RegisterPage() {
   return (
     <section>
       <h2>Create an account</h2>
-      <GoogleButton />
+      <GoogleButton onSignedIn={onSignedIn} />
       <form className="stack-form" onSubmit={submit} noValidate>
         <Field
           label="Email"

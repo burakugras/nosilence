@@ -82,3 +82,7 @@ config :phoenix, :plug_init_mode, :runtime
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
+
+# `npm run dev:desktop` serves the desktop build of the client here during development.
+config :nosilence,
+  desktop_origins: ["http://127.0.0.1:5174", "http://tauri.localhost", "https://tauri.localhost"]

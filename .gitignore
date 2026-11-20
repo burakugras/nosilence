@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+# Client build settings for the desktop app (a server URL, no secrets).
+!client/.env.desktop
 *.pem
 *.key
 CLAUDE.local.md
@@ -20,6 +22,7 @@ erl_crash.dump
 # Node / React
 node_modules/
 dist/
+dist-desktop/
 coverage/
 *.log
 npm-debug.log*

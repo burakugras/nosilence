@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { apiOrigin, isDesktop, sessionToken } from '../platform'
 
 /** Field name → messages, as returned by the server for invalid input. */
 export type FieldErrors = Record<string, string[] | string>
@@ -28,20 +29,23 @@ type Options = {
 }
 
 /**
- * JSON request to our own API. The session lives in an HttpOnly cookie that the
- * browser sends by itself (same origin); this code never sees the token.
+ * JSON request to our own API. On the web the session lives in an HttpOnly
+ * cookie that the browser sends by itself (same origin); this code never sees
+ * it. The desktop app sends its stored token as a bearer header instead.
  */
 export async function request<T>(path: string, options: Options = {}): Promise<T> {
   const { method = 'GET', body, fetchFn = fetch } = options
+  const token = await sessionToken()
   let response: Response
   try {
-    response = await fetchFn(path, {
+    response = await fetchFn(apiOrigin + path, {
       method,
-      credentials: 'same-origin',
+      credentials: isDesktop ? 'omit' : 'same-origin',
       headers: {
         accept: 'application/json',
         // The server refuses state-changing requests that are not JSON (CSRF protection).
         ...(method === 'GET' ? {} : { 'content-type': 'application/json' }),
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
       body: body === undefined ? (method === 'GET' ? undefined : '{}') : JSON.stringify(body),
     })

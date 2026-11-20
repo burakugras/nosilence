@@ -35,7 +35,7 @@ export function LoginPage({ onSignedIn, googleError = null }: Props) {
     <section>
       <h2>Sign in</h2>
       <FormMessage text={googleErrorMessage(googleError)} />
-      <GoogleButton />
+      <GoogleButton onSignedIn={onSignedIn} />
       <form className="stack-form" onSubmit={submit} noValidate>
         <Field
           label="Email"

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { clearSessionToken, desktopGoogleSignIn, isDesktop, saveSessionToken } from '../platform'
 import { ApiError, request } from './http'
 
 export type User = { id: string; email: string; display_name: string }
@@ -28,11 +29,43 @@ export const resetPassword = (token: string, password: string) =>
     body: { token, password },
   })
 
-export const signIn = async (email: string, password: string) =>
-  (await request<{ user: User }>('/api/session', { method: 'POST', body: { email, password } }))
-    .user
+/** Signs in. The desktop app gets its session token back and stores it. */
+export async function signIn(email: string, password: string) {
+  const { user, token } = await request<{ user: User; token?: string }>('/api/session', {
+    method: 'POST',
+    body: { email, password },
+  })
+  if (token) await saveSessionToken(token)
+  return user
+}
 
-export const signOut = () => request<void>('/api/session', { method: 'DELETE' })
+export async function signOut() {
+  try {
+    await request<void>('/api/session', { method: 'DELETE' })
+  } finally {
+    if (isDesktop) await clearSessionToken()
+  }
+}
+
+const GOOGLE_ERRORS: Record<string, string> = {
+  signup_in_browser: 'Finish creating your account in the browser window, then sign in here again.',
+  google_denied: 'Google sign-in was cancelled.',
+  google_email: 'Your Google account has no verified email address.',
+  timeout: 'Google sign-in took too long. Please try again.',
+}
+
+/** Desktop app: Google in the system browser, then a one-time code for a session. */
+export async function desktopGoogle(): Promise<User> {
+  const result = await desktopGoogleSignIn()
+  if ('error' in result)
+    throw new ApiError(GOOGLE_ERRORS[result.error] ?? 'Google sign-in failed. Please try again.', 0)
+  const { user, token } = await request<{ user: User; token: string }>(
+    '/api/auth/desktop/exchange',
+    { method: 'POST', body: result },
+  )
+  await saveSessionToken(token)
+  return user
+}
 
 /** The signed-in user, or null when there is no valid session. */
 export async function currentUser(fetchFn?: typeof fetch): Promise<User | null> {

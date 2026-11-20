@@ -30,3 +30,4 @@ What becomes easier, what becomes harder, what we must do next.
 | [0005](0005-communities-and-permissions.md) | Communities, invites and voice channel capacity |
 | [0006](0006-presence-and-text-channels.md) | Real-time gateway, presence and text channels |
 | [0007](0007-voice-e2ee.md) | Voice end-to-end encryption with MLS |
+| [0008](0008-desktop-app.md) | Windows desktop app with Tauri |
