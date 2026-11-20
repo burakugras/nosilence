@@ -58,31 +58,40 @@ async function setup() {
 }
 
 describe('TextChannel scrolling', () => {
-  it('follows new messages while the reader is at the bottom', async () => {
+  it("never moves for others' messages, even at the bottom; announces those out of sight", async () => {
     const { list, emit } = await setup()
+    // At the bottom: 2 messages of 100 px in a 100 px window.
+    list.scrollTop = 100
+    fireEvent.scroll(list)
+
     emit({ type: 'message_created', message: msg(3) })
-    expect(list.scrollTop).toBe(300)
+    expect(list.scrollTop).toBe(100)
+    expect(screen.getByRole('button', { name: '1 new message ↓' })).toBeInTheDocument()
+    expect(screen.getByText('message 3').closest('li')).toHaveClass('first-unseen')
   })
 
-  it('leaves the view alone while the reader is further up, and says what is new', async () => {
+  it('leads to the first unseen message, not to the end', async () => {
     const { list, emit } = await setup()
     list.scrollTop = 0
     fireEvent.scroll(list)
     emit({ type: 'message_created', message: msg(3) })
-    expect(list.scrollTop).toBe(0)
     emit({ type: 'message_created', message: msg(4) })
-    expect(screen.getByRole('button', { name: '2 new messages ↓' })).toBeInTheDocument()
+    expect(list.scrollTop).toBe(0)
 
-    // The first unseen message is marked; the strip takes the reader there, not to the end.
-    const first = screen.getByText('message 3').closest('li')!
-    expect(first).toHaveClass('first-unseen')
     fireEvent.click(screen.getByRole('button', { name: '2 new messages ↓' }))
     expect(list.scrollTop).toBe(200)
     expect(screen.queryByRole('button', { name: /new message/ })).toBeNull()
-    expect(first).toHaveClass('first-unseen')
+    expect(screen.getByText('message 3').closest('li')).toHaveClass('first-unseen')
   })
 
-  it('scrolling down to the bottom clears the strip', async () => {
+  it('does not announce a message that landed in sight', async () => {
+    const { list, emit } = await setup()
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 1000 })
+    emit({ type: 'message_created', message: msg(3) })
+    expect(screen.queryByRole('button', { name: /new message/ })).toBeNull()
+  })
+
+  it('scrolling down to the bottom clears the strip and the mark', async () => {
     const { list, emit } = await setup()
     list.scrollTop = 0
     fireEvent.scroll(list)
@@ -91,9 +100,10 @@ describe('TextChannel scrolling', () => {
     list.scrollTop = 200
     fireEvent.scroll(list)
     expect(screen.queryByRole('button', { name: /new message/ })).toBeNull()
+    expect(screen.getByText('message 3').closest('li')).not.toHaveClass('first-unseen')
   })
 
-  it('always goes to the bottom after sending', async () => {
+  it('always goes to the end after sending', async () => {
     const { list } = await setup()
     list.scrollTop = 0
     fireEvent.scroll(list)

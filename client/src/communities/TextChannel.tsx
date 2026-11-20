@@ -37,10 +37,14 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
   const update = (change: (messages: Message[]) => Message[]) =>
     setHistory((h) => h && { ...h, messages: change(h.messages) })
 
-  // Scrolling: follow new messages while the reader is at the bottom; leave the
-  // view alone while they read older ones; keep the place when older ones load.
+  // Scrolling (Burak's choice): other people's messages never move the view.
+  // New ones out of sight are announced by a strip that leads to the first of
+  // them. The view moves only for the reader's own actions: opening the channel
+  // and sending go to the end; loading older messages keeps the place.
   const list = useRef<HTMLOListElement>(null)
-  const atBottom = useRef(true)
+  const scrollToEnd = useRef(true)
+  // Messages from others waiting to be checked: did they land in sight?
+  const incoming = useRef<string[]>([])
   const heightBeforeOlder = useRef<number>(undefined)
   // Messages from others that arrived while the reader was further up, and the
   // first of them (marked with a "New" line, where the strip takes the reader).
@@ -55,8 +59,7 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
   function onScroll() {
     const el = list.current
     if (!el) return
-    atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX
-    if (atBottom.current) {
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX) {
       setUnseen(0)
       setFirstUnseenId(undefined)
     }
@@ -72,7 +75,23 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
 
   useLayoutEffect(() => {
     const el = list.current
-    if (el && atBottom.current) el.scrollTop = el.scrollHeight
+    if (!el) return
+    const arrived = incoming.current
+    incoming.current = []
+    if (scrollToEnd.current) {
+      scrollToEnd.current = false
+      el.scrollTop = el.scrollHeight
+      return
+    }
+    // Only messages that landed below what is on screen count as unseen.
+    const outOfSight = arrived.filter((id) => {
+      const item = el.querySelector<HTMLElement>(`[data-message-id="${id}"]`)
+      return item && item.offsetTop - el.offsetTop >= el.scrollTop + el.clientHeight
+    })
+    if (outOfSight.length > 0) {
+      setUnseen((n) => n + outOfSight.length)
+      setFirstUnseenId((id) => id ?? outOfSight[0])
+    }
   }, [lastId])
 
   useLayoutEffect(() => {
@@ -99,10 +118,7 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
       subscribe((event) => {
         if (event.type === 'message_created' && event.message.channel_id === channel.id) {
           update((ms) => merge(ms, [event.message]))
-          if (!atBottom.current && event.message.author?.id !== currentUserId) {
-            setUnseen((n) => n + 1)
-            setFirstUnseenId((id) => id ?? event.message.id)
-          }
+          if (event.message.author?.id !== currentUserId) incoming.current.push(event.message.id)
         }
         if (event.type === 'message_deleted' && event.channel_id === channel.id)
           update((ms) => ms.filter((m) => m.id !== event.id))
@@ -140,8 +156,8 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
     setMessage(undefined)
     try {
       const sent = await sendMessage(channel.id, text.trim())
-      // Your own message always brings you to the bottom.
-      atBottom.current = true
+      // Your own message always brings you to the end.
+      scrollToEnd.current = true
       update((ms) => merge(ms, [sent]))
       setText('')
     } catch (e) {
