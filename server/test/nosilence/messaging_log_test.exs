@@ -8,8 +8,6 @@ defmodule Nosilence.MessagingLogTest do
 
   alias Nosilence.Messaging
 
-  require Logger
-
   test "message content never reaches the logs, even at debug level" do
     owner = confirmed_user_fixture()
     %{text_channel: ch} = community_fixture(owner)

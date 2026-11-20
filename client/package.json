@@ -11,7 +11,8 @@
     "test": "node scripts/vitest.mjs run",
     "typecheck": "tsc -b",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "build:mls": "wasm-pack build mls --target web --release --no-pack --out-dir ../src/e2ee/mls-pkg --out-name nosilence_mls"
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.25",

@@ -57,3 +57,6 @@ config :phoenix, :plug_init_mode, :runtime
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+# Fail over to the next MLS committer quickly in tests.
+config :nosilence, Nosilence.Voice.Group, commit_timeout_ms: 150
