@@ -73,6 +73,7 @@ defmodule Nosilence.Privacy do
       account: Accounts.export_account(user),
       memberships: Communities.memberships_of(user),
       messages: Messaging.messages_by(user),
+      read_positions: Messaging.read_states_of(user),
       invites_created: Communities.invites_created_by(user),
       traffic_records: TrafficLog.for_user(user.id)
     }

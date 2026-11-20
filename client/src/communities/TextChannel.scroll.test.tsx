@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Message } from '../api/messages'
 import type { LiveEvent } from '../gateway/types'
 import { TextChannel } from './TextChannel'
 
 const msg = (n: number, author = 'u2'): Message => ({
   id: `m${String(n).padStart(3, '0')}`,
+  seq: n,
   channel_id: 't1',
   text: `message ${n}`,
   author: { id: author, display_name: author },
@@ -14,32 +15,42 @@ const msg = (n: number, author = 'u2'): Message => ({
 })
 
 vi.mock('../api/messages', () => ({
-  listMessages: () => Promise.resolve({ messages: [msg(1), msg(2)], has_more: false }),
+  // By default the reader had read everything (up to message 2).
+  listMessages: () =>
+    Promise.resolve({
+      messages: [msg(1), msg(2), ...(readUpTo < 2 ? [] : [])],
+      has_more: false,
+      read: { message_id: `m00${readUpTo}`, seq: readUpTo },
+    }),
+  markRead: (_channel: string, id: string) => {
+    marked.push(id)
+    return Promise.resolve()
+  },
   sendMessage: (_c: string, text: string) => Promise.resolve({ ...msg(50, 'u1'), text }),
   deleteMessage: () => Promise.resolve(),
 }))
 
-// jsdom has no layout: give the list a fixed size that grows with each message,
-// and each message a position 100 px below the previous one.
-function fakeLayout(el: HTMLElement) {
-  Object.defineProperty(HTMLElement.prototype, 'offsetTop', {
-    configurable: true,
-    get(this: HTMLElement) {
-      return this.tagName === 'LI' ? [...this.parentElement!.children].indexOf(this) * 100 : 0
-    },
+// jsdom has no layout. From the start, every list is 100 px tall and each
+// message 100 px high, placed 100 px below the previous one.
+beforeAll(() => {
+  const define = (name: string, get: (this: HTMLElement) => number) =>
+    Object.defineProperty(HTMLElement.prototype, name, { configurable: true, get })
+  define('offsetTop', function () {
+    return this.tagName === 'LI' ? [...this.parentElement!.children].indexOf(this) * 100 : 0
   })
-  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
-    configurable: true,
-    get(this: HTMLElement) {
-      return this.tagName === 'LI' ? 100 : 0
-    },
+  define('offsetHeight', function () {
+    return this.tagName === 'LI' ? 100 : 0
   })
-  Object.defineProperty(el, 'clientHeight', { configurable: true, value: 100 })
-  Object.defineProperty(el, 'scrollHeight', {
-    configurable: true,
-    get: () => el.querySelectorAll('li').length * 100,
+  define('clientHeight', function () {
+    return this.tagName === 'OL' ? 100 : 0
   })
-}
+  define('scrollHeight', function () {
+    return this.tagName === 'OL' ? this.querySelectorAll('li').length * 100 : 0
+  })
+})
+
+let readUpTo = 2
+const marked: string[] = []
 
 async function setup() {
   let handler: (e: LiveEvent) => void = () => {}
@@ -59,11 +70,32 @@ async function setup() {
     />,
   )
   const list = await screen.findByRole('list', { name: 'Messages' })
-  fakeLayout(list)
   return { list, emit: (e: LiveEvent) => act(() => handler(e)) }
 }
 
 describe('TextChannel scrolling', () => {
+  afterEach(() => {
+    readUpTo = 2
+    marked.length = 0
+    vi.useRealTimers()
+  })
+
+  it('opens at the first message after where the reader stopped, and saves progress', async () => {
+    readUpTo = 1
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const { list } = await setup()
+    const second = screen.getByText('message 2').closest('li')!
+    expect(second).toHaveClass('unseen')
+    expect(second).toHaveClass('first-unseen')
+
+    // On screen: the tint fades and the read position moves to message 2.
+    act(() => vi.advanceTimersByTime(1_600))
+    expect(second).not.toHaveClass('unseen')
+    act(() => vi.advanceTimersByTime(1_000))
+    expect(marked).toEqual(['m002'])
+    expect(list).toBeInTheDocument()
+  })
+
   it("never moves for others' messages, even at the bottom; announces those out of sight", async () => {
     const { list, emit } = await setup()
     // At the bottom: 2 messages of 100 px in a 100 px window.

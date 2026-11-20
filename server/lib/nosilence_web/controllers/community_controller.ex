@@ -32,9 +32,19 @@ defmodule NosilenceWeb.CommunityController do
   def show(conn, %{"id" => id}) do
     with {:ok, %{community: c, channels: channels, membership: m}} <-
            Communities.get_community(conn.assigns.current_user, id) do
+      unread =
+        Nosilence.Messaging.unread_counts(
+          conn.assigns.current_user,
+          for(ch <- channels, ch.kind == "text", do: ch.id)
+        )
+
       json(conn, %{
         community: %{id: c.id, name: c.name, role: m.role},
-        channels: Enum.map(channels, &channel_json/1)
+        channels:
+          Enum.map(channels, fn ch ->
+            json = channel_json(ch)
+            if ch.kind == "text", do: Map.put(json, :unread, unread[ch.id]), else: json
+          end)
       })
     end
   end

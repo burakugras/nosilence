@@ -15,7 +15,7 @@ defmodule Nosilence.Messaging do
   alias Nosilence.Communities
   alias Nosilence.Communities.Policy
   alias Nosilence.Events
-  alias Nosilence.Messaging.Message
+  alias Nosilence.Messaging.{Message, ReadState}
   alias Nosilence.Repo
 
   # Control characters (except tab and newline) and bidirectional overrides,
@@ -24,7 +24,8 @@ defmodule Nosilence.Messaging do
 
   @doc """
   One page of a text channel's history, oldest first. `"before"` (a message id)
-  pages further back. Returns `%{messages: [...], has_more: boolean}`.
+  pages further back. Returns `%{messages: [...], has_more: boolean, read: read}`
+  where `read` is where the user stopped reading (or nil).
   """
   def list_messages(%User{} = user, channel_id, opts \\ %{}) do
     with {:ok, channel, _} <- text_channel(user, channel_id, :view),
@@ -34,12 +35,17 @@ defmodule Nosilence.Messaging do
       rows =
         Repo.all(
           from m in query,
-            order_by: [desc: m.inserted_at, desc: m.id],
+            order_by: [desc: m.seq],
             limit: ^(size + 1),
             preload: :author
         )
 
-      {:ok, %{messages: rows |> Enum.take(size) |> Enum.reverse(), has_more: length(rows) > size}}
+      {:ok,
+       %{
+         messages: rows |> Enum.take(size) |> Enum.reverse(),
+         has_more: length(rows) > size,
+         read: read_state(user, channel.id)
+       }}
     end
   end
 
@@ -56,8 +62,100 @@ defmodule Nosilence.Messaging do
         |> Map.put(:author, user)
 
       Events.broadcast(channel.community_id, "message_created", to_payload(message))
+      # Writing in a channel means you have caught up with it.
+      advance_read(user.id, channel.id, message)
       {:ok, message}
     end
+  end
+
+  ## Read state (ADR 0010)
+
+  @doc """
+  Moves the user's read position in a text channel forward to `message_id`
+  (never backwards). `:ok`, or `{:error, :not_found}`.
+  """
+  def mark_read(%User{} = user, channel_id, message_id) do
+    with {:ok, channel, _} <- text_channel(user, channel_id, :view),
+         {:ok, id} <- Ecto.UUID.cast(message_id),
+         %Message{} = message <-
+           Repo.one(from m in Message, where: m.id == ^id and m.channel_id == ^channel.id) do
+      advance_read(user.id, channel.id, message)
+      :ok
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  defp advance_read(user_id, channel_id, %Message{id: id, seq: seq}) do
+    now = DateTime.utc_now()
+
+    Repo.insert_all(
+      ReadState,
+      [
+        %{
+          user_id: user_id,
+          channel_id: channel_id,
+          last_read_message_id: id,
+          last_read_seq: seq,
+          updated_at: now
+        }
+      ],
+      conflict_target: [:user_id, :channel_id],
+      # Only forward: an older message never moves the position back.
+      on_conflict:
+        from(r in ReadState,
+          where: r.last_read_seq < ^seq,
+          update: [set: [last_read_message_id: ^id, last_read_seq: ^seq, updated_at: ^now]]
+        )
+    )
+  end
+
+  defp read_state(user, channel_id) do
+    Repo.one(
+      from r in ReadState,
+        where: r.user_id == ^user.id and r.channel_id == ^channel_id,
+        select: %{message_id: r.last_read_message_id, seq: r.last_read_seq}
+    )
+  end
+
+  @unread_cap 100
+
+  @doc """
+  Unread messages from others per text channel, `%{channel_id => count}`,
+  counted up to 100 (the client shows "99+"). Without a read position, every
+  message from others counts.
+  """
+  def unread_counts(%User{id: user_id}, channel_ids) do
+    Map.new(channel_ids, fn channel_id ->
+      unread =
+        from m in Message,
+          left_join: r in ReadState,
+          on: r.channel_id == m.channel_id and r.user_id == ^user_id,
+          where:
+            m.channel_id == ^channel_id and
+              (is_nil(m.author_id) or m.author_id != ^user_id) and
+              (is_nil(r.last_read_seq) or m.seq > r.last_read_seq),
+          select: m.id,
+          limit: @unread_cap
+
+      {channel_id, Repo.aggregate(subquery(unread), :count)}
+    end)
+  end
+
+  @doc "Read positions, for the user's data export."
+  def read_states_of(%User{id: user_id}) do
+    Repo.all(
+      from r in ReadState,
+        join: ch in assoc(r, :channel),
+        join: c in assoc(ch, :community),
+        where: r.user_id == ^user_id,
+        select: %{
+          community: c.name,
+          channel: ch.name,
+          read_up_to_message: r.last_read_message_id,
+          updated_at: r.updated_at
+        }
+    )
   end
 
   defp message_allowed(user) do
@@ -112,6 +210,7 @@ defmodule Nosilence.Messaging do
   def to_payload(%Message{} = m) do
     %{
       id: m.id,
+      seq: m.seq,
       channel_id: m.channel_id,
       # Only plain-text envelopes exist today; see `Message`.
       text: m.content,
@@ -133,14 +232,9 @@ defmodule Nosilence.Messaging do
 
   defp page_query(channel_id, before) do
     with {:ok, id} <- Ecto.UUID.cast(before),
-         %Message{inserted_at: at} <-
+         %Message{seq: seq} <-
            Repo.one(from m in Message, where: m.id == ^id and m.channel_id == ^channel_id) do
-      {:ok,
-       from(m in Message,
-         where:
-           m.channel_id == ^channel_id and
-             (m.inserted_at < ^at or (m.inserted_at == ^at and m.id < ^id))
-       )}
+      {:ok, from(m in Message, where: m.channel_id == ^channel_id and m.seq < ^seq)}
     else
       _ -> {:error, {:invalid, "before"}}
     end

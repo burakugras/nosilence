@@ -5,6 +5,7 @@ import { merge, reconcile } from './messageHistory'
 
 const m = (n: number): Message => ({
   id: `id-${String(n).padStart(3, '0')}`,
+  seq: n,
   channel_id: 't1',
   text: `m${n}`,
   author: null,

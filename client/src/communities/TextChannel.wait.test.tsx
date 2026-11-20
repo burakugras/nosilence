@@ -6,7 +6,8 @@ import { TextChannel } from './TextChannel'
 
 let sendCalls = 0
 vi.mock('../api/messages', () => ({
-  listMessages: () => Promise.resolve({ messages: [], has_more: false }),
+  listMessages: () => Promise.resolve({ messages: [], has_more: false, read: null }),
+  markRead: () => Promise.resolve(),
   sendMessage: () => {
     sendCalls += 1
     return Promise.reject(

@@ -360,3 +360,14 @@ body {
   background: #4f46e5;
   border-radius: 4px;
 }
+
+/* Unread messages in a text channel (channel list) */
+.unread-count {
+  margin-left: 0.4rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  font-size: 0.8em;
+  font-weight: 600;
+  color: #fff;
+  background: #4f46e5;
+}

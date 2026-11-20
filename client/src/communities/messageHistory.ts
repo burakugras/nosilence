@@ -3,8 +3,11 @@ import type { Message, MessagePage } from '../api/messages'
 
 export type History = { messages: Message[]; hasMore: boolean }
 
+// The server's sequence number decides; time and id only for messages without one.
 const byTime = (a: Message, b: Message) =>
-  a.inserted_at.localeCompare(b.inserted_at) || a.id.localeCompare(b.id)
+  (a.seq ?? 0) - (b.seq ?? 0) ||
+  a.inserted_at.localeCompare(b.inserted_at) ||
+  a.id.localeCompare(b.id)
 
 /** Adds messages that are not there yet and keeps the list in time order. */
 export function merge(current: Message[], incoming: Message[]): Message[] {

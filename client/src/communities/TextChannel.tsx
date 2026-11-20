@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -8,7 +9,14 @@ import {
   type KeyboardEvent,
 } from 'react'
 import { ApiError } from '../api/http'
-import { deleteMessage, listMessages, sendMessage, type Message } from '../api/messages'
+import {
+  deleteMessage,
+  listMessages,
+  markRead,
+  sendMessage,
+  type Message,
+  type ReadPosition,
+} from '../api/messages'
 import { FormMessage } from '../components/Field'
 import { formatWait, useCountdown, withoutWait } from '../components/useCountdown'
 import type { CommunityLive } from '../gateway/useCommunityLive'
@@ -17,6 +25,21 @@ import { MAX_MESSAGE, messageError } from '../validation'
 
 /** Within this many pixels of the bottom counts as "reading the latest". */
 const NEAR_BOTTOM_PX = 80
+/** Unread messages already on screen when the channel opens stay tinted this long. */
+const OPENING_TINT_MS = 1500
+/** Wait this long after reading before saving the position (fewer requests). */
+const SAVE_READ_MS = 800
+
+const item = (el: HTMLElement, id: string) =>
+  el.querySelector<HTMLElement>(`[data-message-id="${id}"]`)
+
+/** True if any part of the message is inside the visible part of the list. */
+function inSight(el: HTMLElement, id: string) {
+  const li = item(el, id)
+  if (!li) return false
+  const top = li.offsetTop - el.offsetTop
+  return top < el.scrollTop + el.clientHeight && top + li.offsetHeight > el.scrollTop
+}
 
 type Props = {
   channel: { id: string; name: string }
@@ -24,9 +47,11 @@ type Props = {
   /** Owners may delete anyone's messages. */
   canDeleteAny: boolean
   live: Pick<CommunityLive, 'generation' | 'subscribe'>
+  /** How many messages here the user has not seen yet (for the channel list). */
+  onUnreadChange?: (count: number) => void
 }
 
-export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Props) {
+export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnreadChange }: Props) {
   const [history, setHistory] = useState<History>()
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
@@ -42,7 +67,13 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
   // them. The view moves only for the reader's own actions: opening the channel
   // and sending go to the end; loading older messages keeps the place.
   const list = useRef<HTMLOListElement>(null)
-  const scrollToEnd = useRef(true)
+  const scrollToEnd = useRef(false)
+  // Set by the first load: where the user had stopped reading (ADR 0010).
+  const opening = useRef<{ read: ReadPosition } | null>(null)
+  // More unread messages above the loaded page ("50+").
+  const [moreUnreadAbove, setMoreUnreadAbove] = useState(false)
+  // The read position last saved to the server.
+  const savedSeq = useRef(-1)
   // Messages from others waiting to be checked: did they land in sight?
   const incoming = useRef<string[]>([])
   const heightBeforeOlder = useRef<number>(undefined)
@@ -57,19 +88,8 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
   const firstId = messages?.[0]?.id
   const lastId = messages?.[messages.length - 1]?.id
 
-  const item = (el: HTMLElement, id: string) =>
-    el.querySelector<HTMLElement>(`[data-message-id="${id}"]`)
-
-  /** True if any part of the message is inside the visible part of the list. */
-  function inSight(el: HTMLElement, id: string) {
-    const li = item(el, id)
-    if (!li) return false
-    const top = li.offsetTop - el.offsetTop
-    return top < el.scrollTop + el.clientHeight && top + li.offsetHeight > el.scrollTop
-  }
-
   /** Messages that have now been on screen are no longer unseen. */
-  function markSeen() {
+  const markSeen = useCallback(() => {
     const el = list.current
     if (!el) return
     setUnseenIds((ids) => {
@@ -79,8 +99,9 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
     if (el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX) {
       setUnseenIds([])
       setFirstUnseenId(undefined)
+      setMoreUnreadAbove(false)
     }
-  }
+  }, [])
 
   /** Scrolls so the first message the reader has not seen is at the top. */
   function jumpToFirstUnseen() {
@@ -89,6 +110,32 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
     if (el && first) el.scrollTop = first.offsetTop - el.offsetTop
     markSeen()
   }
+
+  // Opening the channel: start at the first message after where the user
+  // stopped reading; everything from there on counts as new.
+  const hasMore = Boolean(history?.hasMore)
+  useLayoutEffect(() => {
+    const el = list.current
+    if (!el || !opening.current || !messages) return
+    {
+      const readSeq = opening.current.read?.seq
+      opening.current = null
+      const unread = messages.filter(
+        (m) => (readSeq === undefined || m.seq > readSeq) && m.author?.id !== currentUserId,
+      )
+      if (unread.length === 0) {
+        el.scrollTop = el.scrollHeight
+        return
+      }
+      const first = item(el, unread[0].id)
+      el.scrollTop = first ? first.offsetTop - el.offsetTop : el.scrollHeight
+      setUnseenIds(unread.map((m) => m.id))
+      setFirstUnseenId(unread[0].id)
+      setMoreUnreadAbove(hasMore && (readSeq === undefined || readSeq < messages[0].seq))
+      // Those already on screen fade to normal after a moment.
+      window.setTimeout(markSeen, OPENING_TINT_MS)
+    }
+  }, [messages, hasMore, currentUserId, markSeen])
 
   useLayoutEffect(() => {
     const el = list.current
@@ -100,8 +147,9 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
       el.scrollTop = el.scrollHeight
       return
     }
-    // Only messages that landed out of sight count as unseen.
-    const outOfSight = arrived.filter((id) => item(el, id) && !inSight(el, id))
+    // Only messages that landed out of sight count as unseen (and all of them
+    // while the page is in the background).
+    const outOfSight = arrived.filter((id) => item(el, id) && (document.hidden || !inSight(el, id)))
     if (outOfSight.length > 0) {
       setUnseenIds((ids) => [...ids, ...outOfSight])
       setFirstUnseenId((id) => id ?? outOfSight[0])
@@ -120,7 +168,17 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
   useEffect(() => {
     let active = true
     listMessages(channel.id)
-      .then((page) => active && setHistory((current) => reconcile(current, page)))
+      .then((page) => {
+        if (!active) return
+        setHistory((current) => {
+          // Only the first load sets the starting point; reconnects keep the view.
+          if (!current) {
+            opening.current = { read: page.read ?? null }
+            savedSeq.current = page.read?.seq ?? -1
+          }
+          return reconcile(current, page)
+        })
+      })
       .catch(() => active && setMessage('Could not load messages.'))
     return () => {
       active = false
@@ -146,6 +204,40 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
       }),
     [subscribe, channel.id, currentUserId],
   )
+
+  // Save the read position: the newest message before the first one still
+  // unseen (or the newest of all), a moment after it was reached.
+  useEffect(() => {
+    if (!messages?.length) return
+    const unseen = new Set(unseenIds)
+    let target: Message | undefined
+    for (const m of messages) {
+      if (unseen.has(m.id)) break
+      target = m
+    }
+    if (!target || target.seq <= savedSeq.current || opening.current) return
+    const reached = target
+    const timer = window.setTimeout(() => {
+      savedSeq.current = reached.seq
+      markRead(channel.id, reached.id).catch(() => undefined)
+    }, SAVE_READ_MS)
+    return () => window.clearTimeout(timer)
+  }, [messages, unseenIds, channel.id])
+
+  // The channel list shows how many are still unread here.
+  const unreadCount = unseenIds.length
+  useEffect(() => {
+    onUnreadChange?.(unreadCount)
+  }, [unreadCount, onUnreadChange])
+
+  // Coming back to a hidden tab: what is on screen now has been seen.
+  useEffect(() => {
+    const onVisible = () => {
+      if (!document.hidden) window.setTimeout(markSeen, OPENING_TINT_MS)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [markSeen])
 
   async function loadOlder() {
     if (!messages?.length) return
@@ -255,7 +347,10 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
           </ol>
           {unseenIds.length > 0 && (
             <button type="button" className="new-messages" onClick={jumpToFirstUnseen}>
-              {unseenIds.length === 1 ? '1 new message' : `${unseenIds.length} new messages`} ↓
+              {unseenIds.length === 1 && !moreUnreadAbove
+                ? '1 new message'
+                : `${unseenIds.length}${moreUnreadAbove ? '+' : ''} new messages`}{' '}
+              ↓
             </button>
           )}
         </div>
