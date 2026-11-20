@@ -10,7 +10,7 @@ defmodule Nosilence.Privacy do
   be deleted too. Traffic records are kept for their legal retention period.
   """
 
-  alias Nosilence.{Accounts, Communities, Messaging, Repo, TrafficLog, Voice}
+  alias Nosilence.{Accounts, Communities, Events, Messaging, Repo, TrafficLog, Voice}
   alias Nosilence.Accounts.User
 
   @doc "What deleting the account would remove, to show before the user confirms."
@@ -44,6 +44,17 @@ defmodule Nosilence.Privacy do
           :ok = Accounts.delete_user(user)
           closed
         end)
+
+      # Open pages in the other communities update at once: the user's messages
+      # turn into "Deleted user", or disappear if they asked for that.
+      messages_deleted = attrs["delete_messages"] == true
+
+      for id <- member_of do
+        Events.broadcast(id, "account_deleted", %{
+          user_id: user.id,
+          messages_deleted: messages_deleted
+        })
+      end
 
       # Outside the transaction: close owned rooms, leave the others, end live connections.
       Voice.close_rooms(closed_rooms)

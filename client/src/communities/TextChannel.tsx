@@ -44,6 +44,13 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live }: Prop
           update((ms) => merge(ms, [event.message]))
         if (event.type === 'message_deleted' && event.channel_id === channel.id)
           update((ms) => ms.filter((m) => m.id !== event.id))
+        // A deleted account: its messages go, or stay as from "Deleted user".
+        if (event.type === 'account_deleted')
+          update((ms) =>
+            event.messages_deleted
+              ? ms.filter((m) => m.author?.id !== event.user_id)
+              : ms.map((m) => (m.author?.id === event.user_id ? { ...m, author: null } : m)),
+          )
       }),
     [subscribe, channel.id],
   )

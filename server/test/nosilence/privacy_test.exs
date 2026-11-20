@@ -64,6 +64,22 @@ defmodule Nosilence.PrivacyTest do
     assert [_] = TrafficLog.for_user(ctx.leaver.id)
   end
 
+  test "open pages in other communities are told at once", ctx do
+    Phoenix.PubSub.subscribe(
+      Nosilence.PubSub,
+      Nosilence.Events.community_topic(ctx.other.community.id)
+    )
+
+    leaver_id = ctx.leaver.id
+
+    assert :ok = Privacy.delete_account(ctx.leaver, confirm(ctx.leaver))
+
+    assert_receive %Phoenix.Socket.Broadcast{
+      event: "account_deleted",
+      payload: %{user_id: ^leaver_id, messages_deleted: false}
+    }
+  end
+
   test "when asked, the user's messages are deleted too, and only theirs", ctx do
     assert :ok =
              Privacy.delete_account(ctx.leaver, confirm(ctx.leaver, %{"delete_messages" => true}))

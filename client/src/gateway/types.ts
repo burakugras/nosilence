@@ -15,6 +15,7 @@ export type LiveEvent =
   | { type: 'message_deleted'; id: string; channel_id: string }
   | { type: 'member_joined'; user_id: string; display_name: string }
   | { type: 'member_removed'; user_id: string }
+  | { type: 'account_deleted'; user_id: string; messages_deleted: boolean }
   | { type: 'channel_created'; channel: Channel }
 
 export type CommunityListener = {

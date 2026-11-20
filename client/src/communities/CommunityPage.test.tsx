@@ -161,6 +161,26 @@ describe('CommunityPage', () => {
     expect(screen.getByRole('button', { name: '#duyurular' })).toBeInTheDocument()
   })
 
+  it('a deleted account shows as "Deleted user" at once, or its messages go', async () => {
+    const { state } = renderPage()
+    expect(await screen.findByText('hello')).toBeInTheDocument()
+
+    act(() =>
+      state.listener!.event({ type: 'account_deleted', user_id: 'u2', messages_deleted: false }),
+    )
+    expect(screen.getByText('Deleted user')).toBeInTheDocument()
+    expect(screen.getByText('hello')).toBeInTheDocument()
+
+    act(() =>
+      state.listener!.event({ type: 'message_created', message: message('m4444', 'mine', 'u1') }),
+    )
+    act(() =>
+      state.listener!.event({ type: 'account_deleted', user_id: 'u1', messages_deleted: true }),
+    )
+    expect(screen.queryByText('mine')).toBeNull()
+    expect(screen.getByText('hello')).toBeInTheDocument()
+  })
+
   it('a removed member sees "Community not found" at once', async () => {
     const { state } = renderPage()
     await screen.findByRole('heading', { name: 'Ekip' })
