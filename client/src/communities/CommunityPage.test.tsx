@@ -17,7 +17,8 @@ vi.mock('../api/communities', () => ({
       community: { id: 'c1', name: 'Ekip', role },
       channels: [
         { id: 'ch1', name: 'General', kind: 'voice', capacity: 8 },
-        { id: 't1', name: 'general', kind: 'text', capacity: null },
+        { id: 't1', name: 'general', kind: 'text', capacity: null, unread: 0 },
+        { id: 't2', name: 'news', kind: 'text', capacity: null, unread: 4 },
       ],
     }),
   listMembers: () =>
@@ -31,6 +32,7 @@ vi.mock('../api/communities', () => ({
 
 const message = (id: string, text: string, authorId = 'u2'): Message => ({
   id,
+  seq: id.length,
   channel_id: 't1',
   text,
   author: { id: authorId, display_name: authorId === 'u1' ? 'Burak' : 'Ayşe' },
@@ -39,7 +41,13 @@ const message = (id: string, text: string, authorId = 'u2'): Message => ({
 
 const sent: string[] = []
 vi.mock('../api/messages', () => ({
-  listMessages: () => Promise.resolve({ messages: [message('m1', 'hello')], has_more: false }),
+  listMessages: () =>
+    Promise.resolve({
+      messages: [message('m1', 'hello')],
+      has_more: false,
+      read: { message_id: 'm1', seq: 2 },
+    }),
+  markRead: () => Promise.resolve(),
   sendMessage: (_channel: string, text: string) => {
     sent.push(text)
     return Promise.resolve({ ...message('m22', text, 'u1') })
@@ -155,10 +163,51 @@ describe('CommunityPage', () => {
     act(() =>
       state.listener!.event({
         type: 'channel_created',
-        channel: { id: 't2', name: 'duyurular', kind: 'text', capacity: null },
+        channel: { id: 't3', name: 'duyurular', kind: 'text', capacity: null },
       }),
     )
     expect(screen.getByRole('button', { name: '#duyurular' })).toBeInTheDocument()
+  })
+
+  it('a deleted account shows as "Deleted user" at once, or its messages go', async () => {
+    const { state } = renderPage()
+    expect(await screen.findByText('hello')).toBeInTheDocument()
+
+    act(() =>
+      state.listener!.event({ type: 'account_deleted', user_id: 'u2', messages_deleted: false }),
+    )
+    expect(screen.getByText('Deleted user')).toBeInTheDocument()
+    expect(screen.getByText('hello')).toBeInTheDocument()
+
+    act(() =>
+      state.listener!.event({ type: 'message_created', message: message('m4444', 'mine', 'u1') }),
+    )
+    act(() =>
+      state.listener!.event({ type: 'account_deleted', user_id: 'u1', messages_deleted: true }),
+    )
+    expect(screen.queryByText('mine')).toBeNull()
+    expect(screen.getByText('hello')).toBeInTheDocument()
+  })
+
+  it('the channel list shows unread counts and counts new messages elsewhere live', async () => {
+    const { state } = renderPage()
+    expect(await screen.findByLabelText('4 unread')).toHaveTextContent('4')
+
+    act(() =>
+      state.listener!.event({
+        type: 'message_created',
+        message: { ...message('m55555', 'news!'), channel_id: 't2' },
+      }),
+    )
+    expect(screen.getByLabelText('5 unread')).toBeInTheDocument()
+    // The user's own messages elsewhere do not count.
+    act(() =>
+      state.listener!.event({
+        type: 'message_created',
+        message: { ...message('m666666', 'mine', 'u1'), channel_id: 't2' },
+      }),
+    )
+    expect(screen.getByLabelText('5 unread')).toBeInTheDocument()
   })
 
   it('a removed member sees "Community not found" at once', async () => {

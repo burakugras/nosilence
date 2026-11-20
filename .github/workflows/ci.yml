@@ -126,3 +126,17 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
 
+  rust-audit:
+    name: Rust audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-${{ runner.os }}-0.23.0
+      - run: command -v cargo-audit || cargo install cargo-audit --version 0.23.0 --locked
+      # Known advisories that do not affect us are listed, with reasons, in .cargo/audit.toml.
+      - run: cargo audit -f client/mls/Cargo.lock
+      - run: cargo audit -f desktop/Cargo.lock
+

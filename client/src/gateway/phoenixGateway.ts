@@ -74,6 +74,7 @@ export const connectCommunity: ConnectCommunity = (communityId, listener) => {
     ch.on('message_deleted', (p) => listener.event({ type: 'message_deleted', ...p }))
     ch.on('member_joined', (p) => listener.event({ type: 'member_joined', ...p }))
     ch.on('member_removed', (p) => listener.event({ type: 'member_removed', ...p }))
+    ch.on('account_deleted', (p) => listener.event({ type: 'account_deleted', ...p }))
     ch.on('channel_created', (channel) => listener.event({ type: 'channel_created', channel }))
     ch.on('removed', () => listener.removed())
     ch.join()

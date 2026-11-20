@@ -15,7 +15,11 @@ defmodule NosilenceWeb.Endpoint do
   # (`auth_token`); the Origin must be our own web app.
   socket "/socket", NosilenceWeb.Gateway.Socket,
     auth_token: true,
-    websocket: [check_origin: {NosilenceWeb.Endpoint, :allowed_origin?, []}],
+    websocket: [
+      check_origin: {NosilenceWeb.Endpoint, :allowed_origin?, []},
+      # For the traffic log: the connection's IP address and port.
+      connect_info: [:peer_data]
+    ],
     longpoll: false
 
   # Serve at "/" the static files from "priv/static" directory.

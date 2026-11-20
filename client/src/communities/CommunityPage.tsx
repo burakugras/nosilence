@@ -36,10 +36,20 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
   const [message, setMessage] = useState<string>()
   const [textId, setTextId] = useState<string>()
   const [membersKey, setMembersKey] = useState(0)
+  // Unread messages per text channel (ADR 0010): from the server on load, then
+  // counted live for the other channels; the open channel reports its own.
+  const [unread, setUnread] = useState<Record<string, number>>({})
 
   const load = useCallback(() => {
     getCommunity(communityId)
-      .then(setData)
+      .then((loaded) => {
+        setData(loaded)
+        setUnread(
+          Object.fromEntries(
+            loaded.channels.flatMap((c) => (c.kind === 'text' ? [[c.id, c.unread ?? 0]] : [])),
+          ),
+        )
+      })
       .catch(() => setData(null))
   }, [communityId])
 
@@ -53,9 +63,21 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
   const live = useCommunityLive(communityId, onRemoved)
   const { setVoiceChannel, subscribe } = live
 
+  // The text channel on screen (the chosen one, or the first).
+  const openTextId = textId ?? data?.channels.find((c) => c.kind === 'text')?.id
+
   useEffect(
     () =>
       subscribe((event) => {
+        if (
+          event.type === 'message_created' &&
+          event.message.channel_id !== openTextId &&
+          event.message.author?.id !== currentUserId
+        )
+          setUnread((u) => ({
+            ...u,
+            [event.message.channel_id]: (u[event.message.channel_id] ?? 0) + 1,
+          }))
         if (event.type === 'member_joined' || event.type === 'member_removed')
           setMembersKey((k) => k + 1)
         if (event.type === 'channel_created')
@@ -65,7 +87,15 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
               : d,
           )
       }),
-    [subscribe],
+    [subscribe, openTextId, currentUserId],
+  )
+
+  const reportUnread = useCallback(
+    (count: number) => {
+      if (openTextId)
+        setUnread((u) => (u[openTextId] === count ? u : { ...u, [openTextId]: count }))
+    },
+    [openTextId],
   )
 
   const online = useMemo(() => new Set(live.online.map((m) => m.id)), [live.online])
@@ -168,6 +198,11 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
             >
               #{channel.name}
             </button>
+            {(unread[channel.id] ?? 0) > 0 && (
+              <span className="unread-count" aria-label={`${unread[channel.id]} unread`}>
+                {unread[channel.id] >= 100 ? '99+' : unread[channel.id]}
+              </span>
+            )}
           </li>
         ))}
       </ul>
@@ -178,6 +213,7 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
           currentUserId={currentUserId}
           canDeleteAny={isOwner}
           live={live}
+          onUnreadChange={reportUnread}
         />
       )}
 

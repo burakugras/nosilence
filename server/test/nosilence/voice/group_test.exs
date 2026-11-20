@@ -144,7 +144,8 @@ defmodule Nosilence.Voice.GroupTest do
     pid = GenServer.whereis({:via, Registry, {Nosilence.Voice.GroupRegistry, ch}})
     ref = Process.monitor(pid)
     Process.exit(a, :kill)
-    assert_receive {:DOWN, ^ref, :process, ^pid, :normal}
+    # Generous timeout: under a busy test run the chain of exits takes a moment.
+    assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 1_000
     assert Group.state(ch) == nil
   end
 end

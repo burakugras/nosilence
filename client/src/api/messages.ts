@@ -3,6 +3,8 @@ import { request } from './http'
 
 export type Message = {
   id: string
+  /** Order within the channel, assigned by the server. */
+  seq: number
   channel_id: string
   text: string
   /** Null when the author's account was deleted. */
@@ -10,7 +12,10 @@ export type Message = {
   inserted_at: string
 }
 
-export type MessagePage = { messages: Message[]; has_more: boolean }
+/** Where the user stopped reading the channel, or null if never. */
+export type ReadPosition = { message_id: string; seq: number } | null
+
+export type MessagePage = { messages: Message[]; has_more: boolean; read?: ReadPosition }
 
 /** One page of history, oldest first; `before` is a message id for older pages. */
 export const listMessages = (channelId: string, before?: string) =>
@@ -25,6 +30,15 @@ export const sendMessage = async (channelId: string, text: string) =>
       body: { text },
     })
   ).message
+
+/** Moves the user's read position forward to `messageId` (never back). */
+export const markRead = (channelId: string, messageId: string) =>
+  request<void>(`/api/channels/${channelId}/read`, {
+    method: 'POST',
+    body: { message_id: messageId },
+    // Often sent while leaving the channel or closing the page.
+    keepalive: true,
+  })
 
 export const deleteMessage = (id: string) =>
   request<void>(`/api/messages/${id}`, { method: 'DELETE' })

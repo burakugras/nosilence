@@ -86,3 +86,6 @@ config :swoosh, :api_client, false
 # `npm run dev:desktop` serves the desktop build of the client here during development.
 config :nosilence,
   desktop_origins: ["http://127.0.0.1:5174", "http://tauri.localhost", "https://tauri.localhost"]
+
+# Dev-only key for traffic log encryption (not a secret; production uses TRAFFIC_LOG_KEY).
+config :nosilence, Nosilence.TrafficLog, key: "/pl4TSHxCBoHsPMB/0FNHynrxquYEA5vfNoqTKIPUk4="

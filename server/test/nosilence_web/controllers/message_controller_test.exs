@@ -43,6 +43,31 @@ defmodule NosilenceWeb.MessageControllerTest do
              json_response(authed(ctx.owner) |> get(~p"/api/channels/#{ch.id}/messages"), 200)
   end
 
+  test "read position: the channel list shows unread counts, reading clears them",
+       %{text_channel: ch} = ctx do
+    sent = authed(ctx.owner) |> post(~p"/api/channels/#{ch.id}/messages", %{text: "news"})
+    %{"message" => %{"id" => id, "seq" => seq}} = json_response(sent, 201)
+    assert is_integer(seq)
+
+    shown = authed(ctx.member) |> get(~p"/api/communities/#{ctx.community.id}")
+    channels = json_response(shown, 200)["channels"]
+    assert %{"unread" => 1} = Enum.find(channels, &(&1["id"] == ch.id))
+    # Voice channels have no unread count.
+    refute Map.has_key?(Enum.find(channels, &(&1["kind"] == "voice")), "unread")
+
+    assert authed(ctx.member)
+           |> post(~p"/api/channels/#{ch.id}/read", %{message_id: id})
+           |> response(204)
+
+    page = authed(ctx.member) |> get(~p"/api/channels/#{ch.id}/messages") |> json_response(200)
+    assert %{"read" => %{"message_id" => ^id}} = page
+
+    shown = authed(ctx.member) |> get(~p"/api/communities/#{ctx.community.id}")
+
+    assert %{"unread" => 0} =
+             Enum.find(json_response(shown, 200)["channels"], &(&1["id"] == ch.id))
+  end
+
   test "invalid text answers 422 with field errors", %{text_channel: ch, owner: owner} do
     conn = authed(owner) |> post(~p"/api/channels/#{ch.id}/messages", %{text: "  "})
     assert %{"errors" => %{"text" => [_]}} = json_response(conn, 422)

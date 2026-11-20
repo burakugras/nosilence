@@ -3,12 +3,29 @@ defmodule NosilenceWeb.SessionController do
   use NosilenceWeb, :controller
 
   alias Nosilence.Accounts
-  alias NosilenceWeb.UserAuth
+  alias NosilenceWeb.{RateLimited, UserAuth}
 
-  def create(conn, %{"email" => email, "password" => password}) do
+  def create(conn, %{"email" => email, "password" => password}) when is_binary(email) do
+    with :ok <-
+           RateLimited.check(conn,
+             sign_in_ip: RateLimited.ip(conn),
+             sign_in_email: email |> String.trim() |> String.downcase()
+           ) do
+      authenticate(conn, email, password)
+    else
+      {:halted, conn} -> conn
+    end
+  end
+
+  def create(conn, _params) do
+    conn |> put_status(:unauthorized) |> json(%{error: "wrong email or password"})
+  end
+
+  defp authenticate(conn, email, password) do
     case Accounts.authenticate(email, password) do
       {:ok, user} ->
         token = Accounts.create_session(user)
+        conn = UserAuth.log_sign_in(conn, user)
 
         # The desktop app stores the token itself; web pages only ever get the cookie.
         if UserAuth.desktop_origin?(conn) do
@@ -24,10 +41,6 @@ defmodule NosilenceWeb.SessionController do
         # One message for unknown email and wrong password: no account enumeration.
         conn |> put_status(:unauthorized) |> json(%{error: "wrong email or password"})
     end
-  end
-
-  def create(conn, _params) do
-    conn |> put_status(:unauthorized) |> json(%{error: "wrong email or password"})
   end
 
   def delete(conn, _params) do

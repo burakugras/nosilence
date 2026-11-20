@@ -48,6 +48,47 @@ config :nosilence, Nosilence.Communities,
 # may open the gateway and receive session tokens in JSON instead of a cookie.
 config :nosilence, desktop_origins: ["http://tauri.localhost", "https://tauri.localhost"]
 
+# Legally required traffic records (ADR 0009). The key is set per environment.
+config :nosilence, Nosilence.TrafficLog, retention_days: 365
+
+# Nightly clean-up of expired data (ADR 0009).
+config :nosilence, Nosilence.Retention,
+  enabled: true,
+  interval_ms: 24 * 60 * 60_000,
+  # Invites that expired, were revoked or used up are kept this long, then deleted.
+  stale_invite_days: 30
+
+# Rate limits per key (ADR 0009): `limit` hits in any `window` ms. Going over a
+# limit with a `penalty` blocks for that long, longer if it repeats soon.
+config :nosilence, Nosilence.RateLimit,
+  # per email address, and per IP address
+  sign_in_email: [
+    limit: 5,
+    window: 60_000,
+    penalty: 60_000,
+    repeat_penalty: 15 * 60_000,
+    repeat_window: 60 * 60_000
+  ],
+  sign_in_ip: [
+    limit: 20,
+    window: 60_000,
+    penalty: 60_000,
+    repeat_penalty: 15 * 60_000,
+    repeat_window: 60 * 60_000
+  ],
+  # emails sent to one address (confirmation, password reset)
+  email_address: [limit: 3, window: 60 * 60_000],
+  # requests that send email, per IP address
+  email_ip: [limit: 20, window: 60 * 60_000],
+  # messages per user: 10 in 10 seconds; over it, 30 s pause, 2 min if it repeats
+  message: [
+    limit: 10,
+    window: 10_000,
+    penalty: 30_000,
+    repeat_penalty: 2 * 60_000,
+    repeat_window: 5 * 60_000
+  ]
+
 # Text messages (limits are configuration, see docs/ROADMAP.md rule 6).
 config :nosilence, Nosilence.Messaging, max_message_length: 2000, page_size: 50
 

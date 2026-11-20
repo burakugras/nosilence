@@ -68,9 +68,14 @@ defmodule NosilenceWeb.Router do
 
     get "/channels/:channel_id/messages", MessageController, :index
     post "/channels/:channel_id/messages", MessageController, :create
+    post "/channels/:channel_id/read", MessageController, :read
     delete "/messages/:id", MessageController, :delete
 
     post "/socket-token", SocketController, :create
+
+    get "/account/deletion", PrivacyController, :deletion_preview
+    delete "/account", PrivacyController, :delete
+    get "/account/export", PrivacyController, :export
   end
 
   # Enable Swoosh mailbox preview in development

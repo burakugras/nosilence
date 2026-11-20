@@ -62,3 +62,31 @@ config :phoenix,
 config :nosilence, Nosilence.Voice.Group, commit_timeout_ms: 150
 
 config :nosilence, desktop_origins: ["http://desktop.test"]
+
+# All tests come from 127.0.0.1: per-IP limits would count the whole suite.
+# Per-address and per-user limits keep their real values and are tested.
+config :nosilence, Nosilence.RateLimit,
+  sign_in_email: [limit: 5, window: 60_000, penalty: 60_000],
+  sign_in_ip: [limit: 100_000, window: 60_000],
+  email_address: [limit: 3, window: 60 * 60_000],
+  email_ip: [limit: 100_000, window: 60 * 60_000],
+  message: [
+    limit: 10,
+    window: 10_000,
+    penalty: 30_000,
+    repeat_penalty: 2 * 60_000,
+    repeat_window: 5 * 60_000
+  ],
+  test_plain: [limit: 3, window: 200],
+  test_penalty: [
+    limit: 2,
+    window: 60_000,
+    penalty: 300,
+    repeat_penalty: 900,
+    repeat_window: 60_000
+  ]
+
+# Test-only key for traffic log encryption (not a secret; production uses TRAFFIC_LOG_KEY).
+config :nosilence, Nosilence.TrafficLog, key: "H6pa5hGOzb/K7QR2tb+gC2wHj210nch6XTkOsaZal80="
+
+config :nosilence, Nosilence.Retention, enabled: false

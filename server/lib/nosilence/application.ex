@@ -12,6 +12,8 @@ defmodule Nosilence.Application do
       Nosilence.Repo,
       {DNSCluster, query: Application.get_env(:nosilence, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Nosilence.PubSub},
+      Nosilence.RateLimit,
+      Nosilence.Retention,
       NosilenceWeb.Gateway.Presence,
       # One process per voice channel in use, ordering its MLS group changes.
       {Registry, keys: :unique, name: Nosilence.Voice.GroupRegistry},

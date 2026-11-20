@@ -251,6 +251,12 @@ body {
 
 .messages li {
   padding: 0.35rem 0;
+  /* Unseen messages fade back to normal once they have been on screen. */
+  transition: background-color 0.8s ease;
+}
+
+.messages li.unseen {
+  background: color-mix(in srgb, #4f46e5 12%, transparent);
 }
 
 .message-head {
@@ -300,4 +306,68 @@ body {
   font-size: 1.05em;
   letter-spacing: 0.05em;
   white-space: nowrap;
+}
+
+/* Account page */
+.danger-zone {
+  margin-top: 1.5rem;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, #c62828 50%, transparent);
+  border-radius: 8px;
+}
+
+.checkbox {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* "New messages" strip at the bottom of a scrolled-up message list */
+.messages-wrap {
+  position: relative;
+}
+
+.new-messages {
+  position: absolute;
+  left: 50%;
+  bottom: 0.5rem;
+  transform: translateX(-50%);
+  padding: 0.25rem 0.9rem;
+  border: none;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.9em;
+  color: #fff;
+  background: #4f46e5;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 25%);
+  cursor: pointer;
+}
+
+/* The first message the reader had not seen */
+.messages li.first-unseen {
+  border-top: 2px solid #4f46e5;
+  position: relative;
+}
+
+.messages li.first-unseen::before {
+  content: 'New';
+  position: absolute;
+  top: -0.7em;
+  right: 0;
+  padding: 0 0.4rem;
+  font-size: 0.75em;
+  color: #fff;
+  background: #4f46e5;
+  border-radius: 4px;
+}
+
+/* Unread messages in a text channel (channel list) */
+.unread-count {
+  margin-left: 0.4rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  font-size: 0.8em;
+  font-weight: 600;
+  color: #fff;
+  background: #4f46e5;
 }

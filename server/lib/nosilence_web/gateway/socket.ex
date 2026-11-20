@@ -20,9 +20,13 @@ defmodule NosilenceWeb.Gateway.Socket do
   def sign_ticket(user), do: Phoenix.Token.sign(NosilenceWeb.Endpoint, @salt, user.id)
 
   @impl true
-  def connect(_params, socket, %{auth_token: ticket}) when is_binary(ticket) do
+  def connect(_params, socket, %{auth_token: ticket} = info) when is_binary(ticket) do
     with {:ok, user_id} <- Phoenix.Token.verify(socket, @salt, ticket, max_age: @max_age),
          %Accounts.User{} = user <- Accounts.get_user(user_id) do
+      # Legally required traffic record of the connection (ADR 0009).
+      with %{address: ip, port: port} <- info[:peer_data],
+           do: Nosilence.TrafficLog.record(user.id, "connect", {ip, port})
+
       {:ok, assign(socket, :user, user)}
     else
       _ -> :error

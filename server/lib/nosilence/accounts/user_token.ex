@@ -85,6 +85,17 @@ defmodule Nosilence.Accounts.UserToken do
       select: {t, u}
   end
 
+  @doc "Tokens past their validity, each by its own lifetime (for the nightly clean-up)."
+  def expired_query do
+    from t in __MODULE__,
+      where:
+        (t.context == "session" and t.inserted_at < ago(@session_validity_days, "day")) or
+          (t.context == "confirm" and t.inserted_at < ago(@confirm_validity_days, "day")) or
+          (t.context == "reset_password" and t.inserted_at < ago(@reset_validity_hours, "hour")) or
+          (t.context == "desktop_handoff" and
+             t.inserted_at < ago(@handoff_validity_minutes, "minute"))
+  end
+
   @doc "Query for one token row by raw encoded token."
   def by_token_query(encoded, context) do
     case Base.url_decode64(encoded, padding: false) do

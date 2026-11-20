@@ -62,6 +62,7 @@ defmodule NosilenceWeb.GoogleAuthController do
          result <- Accounts.sign_in_with_google(identity) do
       case {result, kept[:desktop]} do
         {{:ok, user}, %{} = desktop} ->
+          # The traffic record is written when the app redeems the code (its own address).
           code = Accounts.create_desktop_handoff(user, desktop.challenge)
           to_desktop(conn, desktop, code: code)
 
@@ -92,7 +93,10 @@ defmodule NosilenceWeb.GoogleAuthController do
   defp web_result(conn, result) do
     case result do
       {:ok, user} ->
-        conn |> UserAuth.put_session_cookie(Accounts.create_session(user)) |> to_app("/")
+        conn
+        |> UserAuth.log_sign_in(user)
+        |> UserAuth.put_session_cookie(Accounts.create_session(user))
+        |> to_app("/")
 
       {:new, identity} ->
         conn
@@ -111,7 +115,9 @@ defmodule NosilenceWeb.GoogleAuthController do
   def exchange(conn, %{"code" => code, "verifier" => verifier}) do
     case Accounts.redeem_desktop_handoff(code, verifier) do
       {:ok, user, token} ->
-        json(conn, %{
+        conn
+        |> UserAuth.log_sign_in(user)
+        |> json(%{
           user: %{id: user.id, email: user.email, display_name: user.display_name},
           token: token
         })
@@ -142,6 +148,7 @@ defmodule NosilenceWeb.GoogleAuthController do
           {:ok, user} ->
             conn
             |> delete_resp_cookie(@signup_cookie, cookie_opts(0))
+            |> UserAuth.log_sign_in(user)
             |> UserAuth.put_session_cookie(Accounts.create_session(user))
             |> json(%{user: %{id: user.id, email: user.email, display_name: user.display_name}})
 
