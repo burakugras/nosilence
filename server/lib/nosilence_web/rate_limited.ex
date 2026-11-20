@@ -30,6 +30,9 @@ defmodule NosilenceWeb.RateLimited do
   defp what(rule) when rule in [:sign_in_email, :sign_in_ip], do: "Too many sign-in attempts."
   defp what(_rule), do: "Too many requests."
 
-  defp wait(seconds) when seconds < 60, do: "#{seconds} seconds"
-  defp wait(seconds), do: "#{div(seconds + 59, 60)} minutes"
+  defp wait(seconds) when seconds < 60, do: plural(seconds, "second")
+  defp wait(seconds), do: plural(div(seconds + 59, 60), "minute")
+
+  defp plural(1, unit), do: "1 #{unit}"
+  defp plural(n, unit), do: "#{n} #{unit}s"
 end
