@@ -24,7 +24,7 @@
 // WAV files in tools/netlab/recordings, to judge intelligibility by ear.
 
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -88,21 +88,41 @@ function tickWav(path, seconds = 120) {
 const PROBE = `
   window.__ticks = { captured: [], heard: [] }
   // Recorded per incoming track: a connection can carry several, mostly silent.
-  window.__recording = { on: false, rate: 48000, tracks: [] }
+  // Recording runs in an AudioWorklet (the audio thread): a ScriptProcessor on the
+  // main thread drops or repeats blocks when busy, which sounds like crackling.
+  window.__recording = { rate: 48000, tracks: [], nodes: [] }
+  const RECORDER = URL.createObjectURL(new Blob([\`
+    registerProcessor('recorder', class extends AudioWorkletProcessor {
+      constructor() { super(); this.on = false; this.port.onmessage = (e) => { this.on = e.data } }
+      process(inputs) {
+        const channel = inputs[0] && inputs[0][0]
+        if (this.on && channel) this.port.postMessage(channel.slice(0))
+        return true
+      }
+    })
+  \`], { type: 'application/javascript' }))
+  window.__recordingStart = () => window.__recording.nodes.forEach((n) => n.port.postMessage(true))
   window.__pcs = []
   const detect = (stream, sink) => {
     const ctx = new AudioContext()
-    const recorded = []
-    if (sink === window.__ticks.heard) window.__recording.tracks.push(recorded)
     const source = ctx.createMediaStreamSource(stream)
+    if (sink === window.__ticks.heard) {
+      const recorded = []
+      window.__recording.tracks.push(recorded)
+      window.__recording.rate = ctx.sampleRate
+      ctx.audioWorklet.addModule(RECORDER).then(() => {
+        const node = new AudioWorkletNode(ctx, 'recorder')
+        node.port.onmessage = (e) => recorded.push(e.data)
+        source.connect(node)
+        const silent = ctx.createGain(); silent.gain.value = 0
+        node.connect(silent); silent.connect(ctx.destination)
+        window.__recording.nodes.push(node)
+      })
+    }
     const probe = ctx.createScriptProcessor(256, 1, 1)
     let last = -1e12
     probe.onaudioprocess = (e) => {
       const data = e.inputBuffer.getChannelData(0)
-      if (sink === window.__ticks.heard && window.__recording.on) {
-        window.__recording.rate = ctx.sampleRate
-        recorded.push(new Float32Array(data))
-      }
       let peak = 0
       for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i]))
       const now = performance.timeOrigin + performance.now()
@@ -176,15 +196,44 @@ async function api(path, { method = 'GET', body, cookie } = {}) {
   const text = await r.text()
   return { status: r.status, json: text ? JSON.parse(text) : null, setCookie: r.headers.get('set-cookie') }
 }
+// Two test accounts and a community, created once and reused (state.json, ignored
+// by Git): creating accounts sends confirmation emails, which are rate limited.
+const STATE = fileURLToPath(new URL('./state.json', import.meta.url))
+const state = existsSync(STATE) ? JSON.parse(readFileSync(STATE, 'utf8')) : {}
+const saveState = () => writeFileSync(STATE, JSON.stringify(state, null, 2))
+
 async function account(name) {
-  const email = `netlab-${name}-${run}@example.com`
-  const password = 'netlab password, long enough'
-  await api('/api/accounts', { method: 'POST', body: { email, password, display_name: name, age_confirmed: true } })
-  const box = await (await fetch(`${API}/dev/mailbox/json`)).json()
-  const mail = box.data.find((m) => m.to.includes(email))
-  await api('/api/accounts/confirm', { method: 'POST', body: { token: /token=([\w-]+)/.exec(mail.text_body)[1] } })
-  const session = await api('/api/session', { method: 'POST', body: { email, password } })
+  let creds = state[name]
+  if (!creds) {
+    creds = { email: `netlab-${name}-${run}@example.com`, password: 'netlab password, long enough' }
+    const reg = await api('/api/accounts', {
+      method: 'POST',
+      body: { ...creds, display_name: name, age_confirmed: true },
+    })
+    if (reg.status !== 201) throw new Error(`could not create ${name}: ${JSON.stringify(reg.json)}`)
+    const box = await (await fetch(`${API}/dev/mailbox/json`)).json()
+    const mail = box.data.find((m) => m.to.includes(creds.email))
+    await api('/api/accounts/confirm', { method: 'POST', body: { token: /token=([\w-]+)/.exec(mail.text_body)[1] } })
+    state[name] = creds
+    saveState()
+  }
+  const session = await api('/api/session', { method: 'POST', body: creds })
+  if (session.status !== 200) throw new Error(`could not sign in ${name}: ${JSON.stringify(session.json)}`)
   return { name, cookie: session.setCookie.split(';')[0] }
+}
+
+/** The shared community, with `receiver` as a member. */
+async function testCommunity(owner, receiver) {
+  if (state.communityId) {
+    const found = await api(`/api/communities/${state.communityId}`, { cookie: owner.cookie })
+    if (found.status === 200) return found.json.community
+  }
+  const community = (await api('/api/communities', { method: 'POST', cookie: owner.cookie, body: { name: 'netlab' } })).json.community
+  const inv = (await api(`/api/communities/${community.id}/invites`, { method: 'POST', cookie: owner.cookie, body: {} })).json
+  await api('/api/invites/accept', { method: 'POST', cookie: receiver.cookie, body: { token: new URL(inv.url).searchParams.get('token') } })
+  state.communityId = community.id
+  saveState()
+  return community
 }
 
 // --- Browsers -------------------------------------------------------------
@@ -251,10 +300,7 @@ function delays(captured, heard, from, to) {
   return out
 }
 
-async function measure(label, network, sender, community) {
-  const receiverUser = await account(`rx${label.replace(/\W/g, '')}`)
-  const inv = (await api(`/api/communities/${community.id}/invites`, { method: 'POST', cookie: sender.user.cookie, body: {} })).json
-  await api('/api/invites/accept', { method: 'POST', cookie: receiverUser.cookie, body: { token: new URL(inv.url).searchParams.get('token') } })
+async function measure(label, network, sender, community, receiverUser) {
 
   const b = await browser()
   netem(network)
@@ -322,7 +368,7 @@ async function measure(label, network, sender, community) {
 }
 
 // --- Listening test ---------------------------------------------------------
-async function listen(sender, community) {
+async function listen(sender, community, user) {
   const out = join(fileURLToPath(new URL('.', import.meta.url)), 'recordings')
   mkdirSync(out, { recursive: true })
   for (const [label, network] of [
@@ -331,9 +377,6 @@ async function listen(sender, community) {
     ['loss-20', 'loss 20%'],
   ]) {
     process.stdout.write(`recording: ${label} ... `)
-    const user = await account(`ear${label.replace(/\W/g, '')}`)
-    const inv = (await api(`/api/communities/${community.id}/invites`, { method: 'POST', cookie: sender.user.cookie, body: {} })).json
-    await api('/api/invites/accept', { method: 'POST', cookie: user.cookie, body: { token: new URL(inv.url).searchParams.get('token') } })
     const b = await browser()
     netem(network)
     try {
@@ -341,7 +384,7 @@ async function listen(sender, community) {
       await joinButton(rx).click()
       await rx.getByText('End-to-end encrypted.').waitFor({ timeout: 20_000 })
       await wait(2_000)
-      await rx.evaluate('window.__recording.on = true')
+      await rx.evaluate('window.__recordingStart()')
       await wait(20_000)
       const data = await rx.evaluate('window.__recordingWav()')
       const file = join(out, `${label}.wav`)
@@ -356,7 +399,8 @@ async function listen(sender, community) {
 
 // --- Run ------------------------------------------------------------------
 const owner = await account('tx')
-const community = (await api('/api/communities', { method: 'POST', cookie: owner.cookie, body: { name: `netlab ${run}` } })).json.community
+const receiver = await account('rx')
+const community = await testCommunity(owner, receiver)
 
 const txBrowser = await browser()
 const results = []
@@ -366,7 +410,7 @@ try {
   await page.getByText('End-to-end encrypted.').waitFor({ timeout: 20_000 })
   const sender = { user: owner, page }
   if (LISTEN) {
-    await listen(sender, community)
+    await listen(sender, community, receiver)
     process.exit(0)
   }
 
@@ -379,7 +423,7 @@ try {
   ]
   for (const [label, network] of scenarios) {
     process.stdout.write(`measuring: ${label} ... `)
-    const r = await measure(label, network, sender, community)
+    const r = await measure(label, network, sender, community, receiver)
     results.push(r)
     console.log('done')
   }
