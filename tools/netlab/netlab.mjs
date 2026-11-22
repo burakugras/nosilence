@@ -39,6 +39,8 @@ const API = arg('api', 'http://127.0.0.1:4000')
 const CHROME = arg('chrome', 'C:/Program Files/Google/Chrome/Application/chrome.exe')
 const HEADLESS = !process.argv.includes('--headful')
 const LISTEN = process.argv.includes('--listen')
+// How many times each reconnect is measured (median and p95 reported).
+const RECONNECTS = Number(arg('reconnects', '5'))
 
 const LIVEKIT_CONTAINER = arg('livekit-container', 'nosilence-livekit-1')
 const TICK_EVERY_MS = 300
@@ -347,17 +349,23 @@ async function measure(label, network, sender, community, receiverUser) {
     // until ticks are heard again (includes up to one tick spacing, 300 ms).
     if (label === 'clean') {
       for (const scenario of ['signal-reconnect', 'full-reconnect']) {
-        const before = (await rx.evaluate('window.__ticks.heard.length')) || 0
-        const t0 = Date.now()
-        await rx.evaluate((s) => window.__nosilenceRoom.simulateScenario(s), scenario)
-        let back
-        for (let t = 0; t < 15_000 && !back; t += 20) {
-          const heardNow = await rx.evaluate('window.__ticks.heard')
-          back = heardNow.slice(before).find((h) => h > t0 + 50)
-          if (!back) await wait(20)
+        const times = []
+        for (let run = 0; run < RECONNECTS; run++) {
+          const before = (await rx.evaluate('window.__ticks.heard.length')) || 0
+          const t0 = Date.now()
+          await rx.evaluate((s) => window.__nosilenceRoom.simulateScenario(s), scenario)
+          let back
+          for (let t = 0; t < 15_000 && !back; t += 20) {
+            const heardNow = await rx.evaluate('window.__ticks.heard')
+            back = heardNow.slice(before).find((h) => h > t0 + 50)
+            if (!back) await wait(20)
+          }
+          times.push(back ? Math.round(back - t0) : 15_000)
+          await wait(3_000)
         }
-        result[`${scenario}_ms`] = back ? Math.round(back - t0) : NaN
-        await wait(3_000)
+        result[`${scenario}_p50_ms`] = quantile(times, 0.5)
+        result[`${scenario}_p95_ms`] = quantile(times, 0.95)
+        result[`${scenario}_all_ms`] = times.join(' ')
       }
     }
     return result
@@ -438,7 +446,11 @@ const clean = results.find((r) => r.scenario === 'clean')
 const loss10 = results.find((r) => r.scenario === '10% loss')
 console.log(`${verdict(clean.join_ms < 2000)} join < 2 s: ${clean.join_ms} ms`)
 console.log(`${verdict(clean.mouth_to_ear_p95_ms < 150)} mouth-to-ear p95 < 150 ms: ${clean.mouth_to_ear_p95_ms} ms (no microphone/speaker hardware delay)`)
-console.log(`${verdict(clean['full-reconnect_ms'] < 3000)} reconnect < 3 s: signal ${clean['signal-reconnect_ms']} ms, full ${clean['full-reconnect_ms']} ms`)
+console.log(
+  `${verdict(clean['full-reconnect_p95_ms'] < 3000)} reconnect < 3 s (p95 of ${RECONNECTS}): ` +
+    `signal ${clean['signal-reconnect_p95_ms']} ms, full ${clean['full-reconnect_p95_ms']} ms ` +
+    `(full, each run: ${clean['full-reconnect_all_ms']} ms)`,
+)
 console.log(`${verdict(loss10.ticks_heard_pct >= 95)} intelligible at 10% loss: ${loss10.ticks_heard_pct}% of ticks heard, ${loss10.concealed_pct}% concealed`)
 writeFileSync(join(workdir, 'results.json'), JSON.stringify(results, null, 2))
 console.log(`results: ${join(workdir, 'results.json')}`)

@@ -467,6 +467,11 @@ Windows provides.
 | zerovec-derive | 0.11.7 | Unicode-3.0 |
 | zmij | 1.0.23 | MIT |
 
+## Development tools (not distributed)
+
+`tools/netlab` uses `playwright-core` 1.65.1 (Apache-2.0) to drive Chrome, and pulls the
+`alpine:3.22` Docker image with `iproute2-tc` to run netem; neither ships with Nosilence.
+
 ## Services used, not distributed
 
 | Software | License |
