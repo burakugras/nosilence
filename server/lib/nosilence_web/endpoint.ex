@@ -48,7 +48,9 @@ defmodule NosilenceWeb.Endpoint do
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
-    json_decoder: Phoenix.json_library()
+    json_decoder: Phoenix.json_library(),
+    # LiveKit webhook signatures cover the raw body.
+    body_reader: {NosilenceWeb.CacheBodyReader, :read_body, []}
 
   plug Plug.MethodOverride
   plug Plug.Head

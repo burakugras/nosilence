@@ -33,3 +33,4 @@ What becomes easier, what becomes harder, what we must do next.
 | [0008](0008-desktop-app.md) | Windows desktop app with Tauri |
 | [0009](0009-limits-retention-and-account-rights.md) | Rate limits, retention and account rights |
 | [0010](0010-read-positions.md) | Read positions and unread messages |
+| [0011](0011-network-measurement-and-webhooks.md) | Network measurement, LiveKit webhooks and anonymous metrics |

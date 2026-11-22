@@ -31,7 +31,7 @@ type Loaded = { community: CommunitySummary; channels: Channel[] }
 
 export function CommunityPage({ communityId, currentUserId, join = requestChannelJoin }: Props) {
   const [data, setData] = useState<Loaded | null>()
-  const [voice, setVoice] = useState<{ join: VoiceJoin; channel: Channel }>()
+  const [voice, setVoice] = useState<{ join: VoiceJoin; channel: Channel; startedAt: number }>()
   const [joining, setJoining] = useState<string>()
   const [message, setMessage] = useState<string>()
   const [textId, setTextId] = useState<string>()
@@ -103,8 +103,9 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
   async function joinChannel(channel: Channel) {
     setJoining(channel.id)
     setMessage(undefined)
+    const startedAt = performance.now()
     try {
-      setVoice({ join: await join(channel.id), channel })
+      setVoice({ join: await join(channel.id), channel, startedAt })
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : 'Could not join the channel.')
     } finally {
@@ -147,6 +148,7 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
             key={voice.channel.id}
             join={voice.join}
             channelId={voice.channel.id}
+            joinStartedAt={voice.startedAt}
             title={`${community.name} · ${voice.channel.name}`}
             onConnected={() => setVoiceChannel(voice.channel.id)}
             onLeave={leaveVoice}

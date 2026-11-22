@@ -36,7 +36,7 @@ Last reviewed: 2026-11-20 (Phase 6). CI runs `mix hex.audit` and `npm audit` on 
 | mint | 1.11.0 | Apache-2.0 |
 | nimble_options | 1.2.0 | Apache-2.0 |
 | nimble_pool | 1.2.0 | Apache-2.0 |
-| phoenix | 1.8.16 | MIT |
+| phoenix | 1.8.17 | MIT |
 | phoenix_ecto | 4.7.0 | MIT |
 | phoenix_pubsub | 2.4.1 | MIT |
 | phoenix_template | 1.1.0 | MIT |
@@ -72,7 +72,7 @@ Last reviewed: 2026-11-20 (Phase 6). CI runs `mix hex.audit` and `npm audit` on 
 | lodash.debounce | 4.0.8 | MIT |
 | loglevel | 1.9.2 | MIT |
 | machina | 7.0.1 | MIT |
-| phoenix (channels client) | 1.8.16 | MIT |
+| phoenix (channels client) | 1.8.17 | MIT |
 | react | 19.3.1 | MIT |
 | react-dom | 19.3.1 | MIT |
 | rxjs | 7.8.2 | Apache-2.0 |
@@ -300,7 +300,7 @@ Windows provides.
 | flate2 | 1.1.11 | MIT OR Apache-2.0 |
 | fnv | 1.0.7 | Apache-2.0 / MIT |
 | foldhash | 0.2.0 | Zlib |
-| form_urlencoded | 1.2.2 | MIT OR Apache-2.0 |
+| form_urlencoded | 1.2.3 | MIT OR Apache-2.0 |
 | generic-array | 0.14.7 | MIT |
 | getrandom | 0.3.4 | MIT OR Apache-2.0 |
 | getrandom | 0.4.3 | MIT OR Apache-2.0 |
@@ -425,7 +425,7 @@ Windows provides.
 | typenum | 1.20.1 | MIT OR Apache-2.0 |
 | unicode-ident | 1.0.27 | (MIT OR Apache-2.0) AND Unicode-3.0 |
 | unicode-segmentation | 1.13.3 | MIT OR Apache-2.0 |
-| url | 2.5.8 | MIT OR Apache-2.0 |
+| url | 2.5.9 | MIT OR Apache-2.0 |
 | urlpattern | 0.6.0 | MIT |
 | utf8_iter | 1.1.0 | Apache-2.0 OR MIT |
 | utf_types | 1.0.0 | Apache-2.0 OR MIT |
@@ -466,6 +466,11 @@ Windows provides.
 | zerovec | 0.11.9 | Unicode-3.0 |
 | zerovec-derive | 0.11.7 | Unicode-3.0 |
 | zmij | 1.0.23 | MIT |
+
+## Development tools (not distributed)
+
+`tools/netlab` uses `playwright-core` 1.65.1 (Apache-2.0) to drive Chrome, and pulls the
+`alpine:3.22` Docker image with `iproute2-tc` to run netem; neither ships with Nosilence.
 
 ## Services used, not distributed
 

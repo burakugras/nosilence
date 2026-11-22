@@ -93,7 +93,6 @@ Postponed on purpose. Reviewed at the start of every phase.
 | Automatic updates for the desktop app: Tauri updater with a signed update (key kept by Burak, copy in GitHub Secrets), releases on GitHub, check on start and a "Check for updates" button | Phase 6 | Phase 8 |
 | Finishing a first Google sign-up inside the desktop app (done in the browser for now) | Phase 6 | Before Phase 8 |
 | macOS app: check WebKit (WKWebView) with microphone and E2EE first | Phase 6 | After the MVP |
-| LiveKit webhooks as a second source for voice presence | Phase 4 | Phase 7 |
 | Disk encryption for the database and backups | Phase 4 | Phase 8 |
 | Legal review of retention periods (traffic logs 1 year, metadata 30 days) | Phase 0 | Phase 8 |
 | Hosting choice (VPS) | Phase 0 | Phase 8 |
@@ -103,3 +102,7 @@ Postponed on purpose. Reviewed at the start of every phase.
 | Behind a reverse proxy, rate limits and traffic records need the real client address (trusted `X-Forwarded-For`) | Phase 7a | Phase 8 |
 | Restricted access to traffic records, with every access logged; a way to answer lawful requests | Phase 7a | Phase 8 |
 | Re-check ignored Rust advisories (`.cargo/audit.toml`) when openmls or Tauri are updated | Phase 7a | Every dependency update |
+| Loss protection that works with E2EE: LiveKit disables RED when E2EE is on; our own redundancy inside the encrypted frame | Phase 7b | Before Phase 8 |
+| Investigate why half of LiveKit full reconnects take about 2 s instead of 0.3 s | Phase 7b | Before Phase 8 |
+| Run tools/netlab on a schedule (nightly) on a dedicated machine | Phase 7b | After the MVP |
+| Production webhook URL in the LiveKit configuration | Phase 7b | Phase 8 |

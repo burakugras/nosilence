@@ -43,6 +43,16 @@ defmodule Nosilence.Voice.Group do
     GenServer.call(ensure_started(channel_id), {:join, user_id, pid, key_package})
   end
 
+  @doc "True if `user_id` has a live MLS session (device) in the channel's group."
+  def has_session?(channel_id, user_id) do
+    case whereis(channel_id) do
+      nil -> false
+      group -> GenServer.call(group, {:has_session?, user_id})
+    end
+  catch
+    :exit, _ -> false
+  end
+
   @doc "A commit for `epoch` from the committer; `:ok` or `{:error, :stale}`."
   def commit(channel_id, user_id, pid, epoch, commit, welcome) do
     case whereis(channel_id) do
@@ -101,6 +111,9 @@ defmodule Nosilence.Voice.Group do
       {:reply, {:create, state.group_id}, dispatch(state)}
     end
   end
+
+  def handle_call({:has_session?, user_id}, _from, state),
+    do: {:reply, Map.has_key?(state.sessions, user_id), state}
 
   def handle_call({:commit, user_id, pid, epoch, commit, welcome}, _from, state) do
     with %{change: change, committer: ^user_id, timer: timer} <- state.in_flight,

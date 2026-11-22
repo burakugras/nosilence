@@ -14,7 +14,8 @@ defmodule Nosilence.Retention do
     counts = %{
       tokens: Nosilence.Accounts.delete_expired_tokens(),
       invites: Nosilence.Communities.delete_stale_invites(config(:stale_invite_days)),
-      traffic_logs: Nosilence.TrafficLog.delete_expired()
+      traffic_logs: Nosilence.TrafficLog.delete_expired(),
+      metrics: Nosilence.Metrics.delete_expired()
     }
 
     Logger.info("retention clean-up: #{inspect(counts)}")

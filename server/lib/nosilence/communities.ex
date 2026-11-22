@@ -157,6 +157,17 @@ defmodule Nosilence.Communities do
     end
   end
 
+  @doc "The community a channel belongs to (for server-side events, no user check)."
+  def community_of_channel(channel_id) do
+    with {:ok, id} <- Ecto.UUID.cast(channel_id),
+         community_id when is_binary(community_id) <-
+           Repo.one(from ch in Channel, where: ch.id == ^id, select: ch.community_id) do
+      {:ok, community_id}
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
   @doc "A voice channel the user may join, or `{:error, :not_found}`."
   def get_channel_for_voice(%User{} = user, channel_id) do
     case authorize_channel(user, channel_id, :join_voice) do

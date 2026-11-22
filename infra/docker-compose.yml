@@ -25,6 +25,9 @@ services:
     image: livekit/livekit-server:v1.13.11
     restart: unless-stopped
     command: ["--config", "/etc/livekit.yaml"]
+    extra_hosts:
+      # The Phoenix server on the Windows host, for webhooks.
+      - "host.docker.internal:host-gateway"
     environment:
       # Format "<api key>: <api secret>"
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
@@ -32,8 +35,35 @@ services:
       - "127.0.0.1:7880:7880"      # HTTP API and WebSocket signaling
       - "127.0.0.1:7881:7881"      # WebRTC over TCP (fallback)
       - "127.0.0.1:7882:7882/udp"  # WebRTC over UDP (single muxed port)
-    volumes:
-      - ./livekit.yaml:/etc/livekit.yaml:ro
+    configs:
+      - source: livekit
+        target: /etc/livekit.yaml
+
+# LiveKit's configuration lives here (not in a separate file) so it can use the
+# API key from .env: webhooks are signed with it.
+configs:
+  livekit:
+    content: |
+      port: 7880
+      log_level: info
+      rtc:
+        tcp_port: 7881
+        # One UDP port for all media instead of a port range; Docker Desktop on
+        # Windows is slow with large UDP ranges.
+        udp_port: 7882
+        # Clients run on the same machine during development.
+        node_ip: 127.0.0.1
+        use_external_ip: false
+      room:
+        # Default room capacity; the backend enforces the same configurable limit.
+        max_participants: 8
+        empty_timeout: 300
+      # Tells the backend who joins and leaves rooms (ADR 0011): presence
+      # correction, and removal of anyone not in the room's MLS group.
+      webhook:
+        api_key: ${LIVEKIT_API_KEY}
+        urls:
+          - http://host.docker.internal:4000/api/livekit/webhook
 
 volumes:
   postgres-data:

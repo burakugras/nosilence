@@ -13,6 +13,7 @@ import {
   LocalAudioTrack,
   RemoteAudioTrack,
   Room,
+  RoomEvent,
   Track,
   type Participant,
   type RemoteParticipant,
@@ -25,6 +26,7 @@ import { VoiceSession, type E2eeStatus } from '../e2ee/session'
 import { openVoiceTopic } from '../gateway/phoenixGateway'
 import { beforeQuit } from '../platform'
 import type { OpenVoiceTopic } from '../gateway/types'
+import { CallQuality, sendCallReport } from './callReport'
 import { summariseInbound, type InboundAudioSample, type InboundAudioSummary } from './stats'
 
 type Props = {
@@ -34,6 +36,8 @@ type Props = {
   title: string
   /** Connected to the room (used to show the user in the channel for others). */
   onConnected?: () => void
+  /** When the user pressed Join (performance.now()), to measure the join time. */
+  joinStartedAt?: number
   onLeave: () => void
   openTopic?: OpenVoiceTopic
 }
@@ -60,6 +64,7 @@ export function VoiceRoom({
   title,
   onConnected,
   onLeave,
+  joinStartedAt,
   openTopic = openVoiceTopic,
 }: Props) {
   const [{ room, keyProvider }] = useState(createRoom)
@@ -98,6 +103,24 @@ export function VoiceRoom({
     }
   }, [room, keyProvider, channelId, join.identity, openTopic])
 
+  // Anonymous call quality, sent once when the call ends (ADR 0011).
+  const [quality] = useState(() => new CallQuality())
+  useEffect(() => {
+    const onReconnecting = () => quality.reconnected()
+    room.on(RoomEvent.Reconnecting, onReconnecting)
+    const timer = window.setInterval(() => void quality.sample(room).catch(() => undefined), 5000)
+    // Development builds only: the network test tool (tools/netlab) drives the room.
+    if (import.meta.env.DEV)
+      (window as unknown as { __nosilenceRoom?: Room }).__nosilenceRoom = room
+    return () => {
+      room.off(RoomEvent.Reconnecting, onReconnecting)
+      window.clearInterval(timer)
+      const report = quality.finish()
+      if (report.join_ms !== undefined && report.duration_s >= 1)
+        sendCallReport(report).catch(() => undefined)
+    }
+  }, [room, quality])
+
   // Quitting the desktop app: say goodbye to LiveKit so others see us leave at once.
   useEffect(() => beforeQuit(() => room.disconnect()), [room])
 
@@ -115,7 +138,10 @@ export function VoiceRoom({
       connect={keyed && !ended}
       audio={{ echoCancellation: true, noiseSuppression: true, autoGainControl: true }}
       video={false}
-      onConnected={onConnected}
+      onConnected={() => {
+        quality.joined(joinStartedAt)
+        onConnected?.()
+      }}
       onDisconnected={() => !ended && onLeave()}
       className="voice-room"
     >
