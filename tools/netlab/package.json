@@ -1,0 +1,13 @@
+{
+  "name": "nosilence-netlab",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "description": "Measures Nosilence voice against the phase 7 targets, on emulated networks",
+  "type": "module",
+  "scripts": {
+    "measure": "node netlab.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "1.65.1"
+  }
+}

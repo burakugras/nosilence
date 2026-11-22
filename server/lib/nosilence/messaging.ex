@@ -62,6 +62,7 @@ defmodule Nosilence.Messaging do
         |> Map.put(:author, user)
 
       Events.broadcast(channel.community_id, "message_created", to_payload(message))
+      Nosilence.Metrics.count("messages")
       # Writing in a channel means you have caught up with it.
       advance_read(user.id, channel.id, message)
       {:ok, message}

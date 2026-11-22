@@ -77,6 +77,7 @@ config :nosilence, Nosilence.RateLimit,
     repeat_penalty: 2 * 60_000,
     repeat_window: 5 * 60_000
   ],
+  call_report: [limit: 5, window: 60_000],
   test_plain: [limit: 3, window: 200],
   test_penalty: [
     limit: 2,
@@ -90,3 +91,6 @@ config :nosilence, Nosilence.RateLimit,
 config :nosilence, Nosilence.TrafficLog, key: "H6pa5hGOzb/K7QR2tb+gC2wHj210nch6XTkOsaZal80="
 
 config :nosilence, Nosilence.Retention, enabled: false
+
+# Check LiveKit participants against MLS sessions quickly in tests.
+config :nosilence, Nosilence.Voice.Watchdog, grace_ms: 50

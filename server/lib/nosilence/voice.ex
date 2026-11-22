@@ -28,6 +28,7 @@ defmodule Nosilence.Voice do
          :ok <- LiveKitAPI.ensure_room(room, channel.capacity),
          {:ok, identities} <- LiveKitAPI.participant_identities(room),
          :ok <- check_capacity(identities, user.id, channel.capacity) do
+      Nosilence.Metrics.count("voice_joins")
       {:ok, issue(user, room)}
     end
   end

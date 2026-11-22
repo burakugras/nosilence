@@ -14,6 +14,7 @@ defmodule Nosilence.Application do
       {Phoenix.PubSub, name: Nosilence.PubSub},
       Nosilence.RateLimit,
       Nosilence.Retention,
+      Nosilence.Voice.Watchdog,
       NosilenceWeb.Gateway.Presence,
       # One process per voice channel in use, ordering its MLS group changes.
       {Registry, keys: :unique, name: Nosilence.Voice.GroupRegistry},

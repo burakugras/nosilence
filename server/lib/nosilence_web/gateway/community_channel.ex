@@ -13,7 +13,7 @@ defmodule NosilenceWeb.Gateway.CommunityChannel do
   alias Nosilence.Communities
   alias NosilenceWeb.Gateway.Presence
 
-  intercept ["member_removed", "community_deleted"]
+  intercept ["member_removed", "community_deleted", "voice_left"]
 
   @impl true
   def join("community:" <> community_id, _params, socket) do
@@ -67,6 +67,20 @@ defmodule NosilenceWeb.Gateway.CommunityChannel do
       push(socket, "member_removed", payload)
       {:noreply, socket}
     end
+  end
+
+  # LiveKit says this user left the voice room (ADR 0011): take them out of the
+  # channel's voice presence. Server-side only; nothing is pushed.
+  def handle_out("voice_left", %{user_id: user_id, channel_id: channel_id}, socket) do
+    if user_id == socket.assigns.user.id do
+      Presence.update(socket, user_id, fn meta ->
+        if meta[:voice_channel_id] == channel_id,
+          do: Map.put(meta, :voice_channel_id, nil),
+          else: meta
+      end)
+    end
+
+    {:noreply, socket}
   end
 
   def handle_out("community_deleted", _payload, socket) do

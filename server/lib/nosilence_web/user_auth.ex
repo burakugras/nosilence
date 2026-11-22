@@ -54,6 +54,7 @@ defmodule NosilenceWeb.UserAuth do
   def log_sign_in(conn, user) do
     %{address: ip, port: port} = get_peer_data(conn)
     Nosilence.TrafficLog.record(user.id, "sign_in", {ip, port})
+    Nosilence.Metrics.count("sign_ins")
     conn
   end
 

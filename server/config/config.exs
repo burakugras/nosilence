@@ -80,6 +80,8 @@ config :nosilence, Nosilence.RateLimit,
   email_address: [limit: 3, window: 60 * 60_000],
   # requests that send email, per IP address
   email_ip: [limit: 20, window: 60 * 60_000],
+  # anonymous call quality reports per user (ADR 0011)
+  call_report: [limit: 5, window: 60_000],
   # messages per user: 10 in 10 seconds; over it, 30 s pause, 2 min if it repeats
   message: [
     limit: 10,

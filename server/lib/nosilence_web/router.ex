@@ -19,6 +19,15 @@ defmodule NosilenceWeb.Router do
     plug :fetch_current_user
   end
 
+  # LiveKit server to server: authenticated by a signed JWT, not by a session.
+  pipeline :livekit_webhook do
+  end
+
+  scope "/api/livekit", NosilenceWeb do
+    pipe_through :livekit_webhook
+    post "/webhook", LiveKitWebhookController, :receive
+  end
+
   scope "/api/auth/google", NosilenceWeb do
     pipe_through :oauth_redirect
 
@@ -72,6 +81,7 @@ defmodule NosilenceWeb.Router do
     delete "/messages/:id", MessageController, :delete
 
     post "/socket-token", SocketController, :create
+    post "/metrics/call", MetricsController, :report
 
     get "/account/deletion", PrivacyController, :deletion_preview
     delete "/account", PrivacyController, :delete

@@ -27,6 +27,8 @@ defmodule NosilenceWeb.Gateway.Socket do
       with %{address: ip, port: port} <- info[:peer_data],
            do: Nosilence.TrafficLog.record(user.id, "connect", {ip, port})
 
+      Nosilence.Metrics.count("connections")
+
       {:ok, assign(socket, :user, user)}
     else
       _ -> :error
