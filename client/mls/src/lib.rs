@@ -213,15 +213,15 @@ impl VoiceGroup {
         let MlsMessageBodyIn::Welcome(welcome) = message.extract() else {
             return Err(Error::new("not a Welcome message"));
         };
-        let group = StagedWelcome::new_from_welcome(
-            &self.provider,
-            &MlsGroupJoinConfig::default(),
-            welcome,
-            None,
-        )
-        .map_err(err)?
-        .into_group(&self.provider)
-        .map_err(err)?;
+        // Like `create`: our own Welcomes must carry the ratchet tree, or anyone
+        // we add later cannot join (we may be adding the group's founder back).
+        let config = MlsGroupJoinConfig::builder()
+            .use_ratchet_tree_extension(true)
+            .build();
+        let group = StagedWelcome::new_from_welcome(&self.provider, &config, welcome, None)
+            .map_err(err)?
+            .into_group(&self.provider)
+            .map_err(err)?;
         if group.group_id().as_slice() != expected_group_id {
             return Err(Error::new("Welcome is for another group"));
         }
@@ -347,6 +347,20 @@ mod tests {
         let before = a.voice_key().unwrap();
         add(&mut a, &mut [], &mut b, "bravo");
         assert_ne!(before, b.voice_key().unwrap());
+    }
+
+    #[test]
+    fn someone_who_joined_from_a_welcome_can_add_the_next_member() {
+        // Alfa started the group and leaves; bravo adds alfa back. Bravo's
+        // Welcome must carry the ratchet tree too, or joining fails.
+        let mut a = VoiceGroup::new("alfa").unwrap();
+        let mut b = VoiceGroup::new("bravo").unwrap();
+        let mut c = VoiceGroup::new("charlie").unwrap();
+        a.create(GROUP).unwrap();
+        add(&mut a, &mut [], &mut b, "bravo");
+        add(&mut b, &mut [&mut a], &mut c, "charlie");
+        assert_eq!(c.voice_key().unwrap(), b.voice_key().unwrap());
+        assert_eq!(c.members().unwrap(), vec!["alfa", "bravo", "charlie"]);
     }
 
     #[test]

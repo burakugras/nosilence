@@ -75,3 +75,33 @@ export type DesktopGoogleResult = { code: string; verifier: string } | { error: 
  */
 export const desktopGoogleSignIn = () =>
   invoke<DesktopGoogleResult>('google_sign_in', { apiOrigin })
+
+/**
+ * Desktop push-to-talk: the app polls only these keys (Windows key state, no
+ * keyboard hook) and tells us when they are all held or one is released, also
+ * while another app is in front (ADR 0013). Returns a function that stops it.
+ */
+export function desktopPushToTalk(keys: string[], onChange: (down: boolean) => void): () => void {
+  let stopped = false
+  let down = false
+  let unlisten: (() => void) | undefined
+  void import('@tauri-apps/api/event')
+    .then(({ listen }) =>
+      listen<boolean>('push-to-talk', (event) => {
+        if (stopped || event.payload === down) return
+        down = event.payload
+        onChange(down)
+      }),
+    )
+    .then((stop) => {
+      if (stopped) stop()
+      else unlisten = stop
+    })
+  void invoke('set_push_to_talk', { keys }).catch(() => undefined)
+  return () => {
+    stopped = true
+    unlisten?.()
+    void invoke('set_push_to_talk', { keys: [] }).catch(() => undefined)
+    if (down) onChange(false)
+  }
+}

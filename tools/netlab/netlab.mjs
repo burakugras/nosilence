@@ -39,20 +39,31 @@ const API = arg('api', 'http://127.0.0.1:4000')
 const CHROME = arg('chrome', 'C:/Program Files/Google/Chrome/Application/chrome.exe')
 const HEADLESS = !process.argv.includes('--headful')
 const LISTEN = process.argv.includes('--listen')
+const TRACE = process.argv.includes('--trace')
+const PTT = process.argv.includes('--ptt')
+const REJOIN = process.argv.includes('--rejoin')
+const ONLY = arg('only', '') ? arg('only', '').split(',') : null
 // How many times each reconnect is measured (median and p95 reported).
 const RECONNECTS = Number(arg('reconnects', '5'))
 
 const LIVEKIT_CONTAINER = arg('livekit-container', 'nosilence-livekit-1')
 const TICK_EVERY_MS = 300
 
-/** Degrades the LiveKit container's outgoing traffic (server to clients), or clears it. */
+/**
+ * Degrades the LiveKit container's traffic, or clears it. A netem spec affects
+ * server to client; `uplink-loss <percent>` drops that share of the UDP packets
+ * clients send to the server (iptables), as a lossy sender connection would.
+ */
 function netem(spec) {
-  const tc = spec
-    ? `tc qdisc replace dev eth0 root netem ${spec}`
-    : 'tc qdisc del dev eth0 root 2>/dev/null; true'
+  const uplink = /^uplink-loss (\d+)$/.exec(spec)
+  const cmd = uplink
+    ? `iptables -I INPUT -p udp -m statistic --mode random --probability ${Number(uplink[1]) / 100} -j DROP`
+    : spec
+      ? `tc qdisc replace dev eth0 root netem ${spec}`
+      : 'tc qdisc del dev eth0 root 2>/dev/null; iptables -F INPUT 2>/dev/null; true'
   execFileSync('docker', [
     'run', '--rm', '--network', `container:${LIVEKIT_CONTAINER}`, '--cap-add', 'NET_ADMIN',
-    'alpine:3.22', 'sh', '-c', `apk add -q iproute2-tc >/dev/null 2>&1 && ${tc}`,
+    'alpine:3.22', 'sh', '-c', `apk add -q iproute2-tc iptables >/dev/null 2>&1 && ${cmd}`,
   ])
 }
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -140,12 +151,16 @@ const PROBE = `
     if (stream.getAudioTracks().length) detect(new MediaStream(stream.getAudioTracks()), window.__ticks.captured)
     return stream
   }
+  const detected = new WeakSet()
   const Original = window.RTCPeerConnection
   window.RTCPeerConnection = function (...args) {
     const pc = new Original(...args)
     window.__pcs.push(pc)
     pc.addEventListener('track', (e) => {
-      if (e.track.kind === 'audio') detect(new MediaStream([e.track]), window.__ticks.heard)
+      // A reused transceiver fires 'track' again for the same track: listen once.
+      if (e.track.kind !== 'audio' || detected.has(e.track)) return
+      detected.add(e.track)
+      detect(new MediaStream([e.track]), window.__ticks.heard)
     })
     return pc
   }
@@ -172,7 +187,7 @@ const PROBE = `
     return btoa(bin)
   }
   window.__inbound = async () => {
-    let lost = 0, received = 0, concealed = 0, samples = 0
+    let lost = 0, received = 0, concealed = 0, samples = 0, nacks = 0
     for (const pc of window.__pcs) {
       if (pc.connectionState === 'closed') continue
       ;(await pc.getStats()).forEach((r) => {
@@ -180,10 +195,15 @@ const PROBE = `
           lost += r.packetsLost || 0; received += r.packetsReceived || 0
           concealed += (r.concealedSamples || 0) - (r.silentConcealedSamples || 0)
           samples += r.totalSamplesReceived || 0
+          nacks += r.nackCount || 0
         }
       })
     }
-    return { lost, received, concealed, samples }
+    const sdp = window.__pcs.map((pc) => pc.remoteDescription?.sdp || '').join(' ')
+    const opus = (/a=rtpmap:([0-9]+) opus/i.exec(sdp) || [])[1]
+    const audioNack = !!opus && sdp.includes('a=rtcp-fb:' + opus + ' nack')
+    const opusLines = sdp.split(String.fromCharCode(10)).filter((l) => opus && l.includes(':' + opus + ' ')).join(' | ')
+    return { lost, received, concealed, samples, nacks, audioNack, opusLines }
   }
 `
 
@@ -348,19 +368,37 @@ async function measure(label, network, sender, community, receiverUser) {
     // Reconnect: LiveKit drops and rebuilds the receiver's connection; how long
     // until ticks are heard again (includes up to one tick spacing, 300 ms).
     if (label === 'clean') {
+      // Room events on the receiver: a run only counts if LiveKit really started
+      // reconnecting (simulateScenario is sometimes ignored right after a
+      // reconnect, and the next tick would then look like a fast reconnect).
+      await rx.evaluate(() => {
+        const room = window.__nosilenceRoom
+        window.__trace = []
+        for (const e of ['reconnecting', 'signalReconnecting', 'reconnected', 'trackSubscribed'])
+          room.on(e, () => window.__trace.push([e, Date.now()]))
+      })
       for (const scenario of ['signal-reconnect', 'full-reconnect']) {
         const times = []
-        for (let run = 0; run < RECONNECTS; run++) {
+        for (let attempt = 0; times.length < RECONNECTS && attempt < RECONNECTS * 3; attempt++) {
+          await rx.evaluate('window.__trace.length = 0')
           const before = (await rx.evaluate('window.__ticks.heard.length')) || 0
           const t0 = Date.now()
           await rx.evaluate((s) => window.__nosilenceRoom.simulateScenario(s), scenario)
-          let back
+          // Sound back: the first tick heard after LiveKit started reconnecting.
+          let back, trace, started
           for (let t = 0; t < 15_000 && !back; t += 20) {
-            const heardNow = await rx.evaluate('window.__ticks.heard')
-            back = heardNow.slice(before).find((h) => h > t0 + 50)
+            trace = await rx.evaluate('window.__trace')
+            started = trace.find(([e]) => e === 'reconnecting' || e === 'signalReconnecting')
+            if (started || t > 1_000) {
+              const heardNow = await rx.evaluate('window.__ticks.heard')
+              back = heardNow.slice(before).find((h) => h > Math.max(t0 + 50, started?.[1] ?? 0))
+            }
             if (!back) await wait(20)
           }
-          times.push(back ? Math.round(back - t0) : 15_000)
+          if (TRACE)
+            console.log(`
+${scenario}: ` + trace.map(([n, t]) => `${n}@${t - t0}`).join(' ') + ` heard@${back ? Math.round(back - t0) : '-'}`)
+          if (started) times.push(back ? Math.round(back - t0) : 15_000)
           await wait(3_000)
         }
         result[`${scenario}_p50_ms`] = quantile(times, 0.5)
@@ -376,6 +414,81 @@ async function measure(label, network, sender, community, receiverUser) {
 }
 
 // --- Listening test ---------------------------------------------------------
+/** Leave and join again, twice: the call must be encrypted and audible each time. */
+async function rejoinCheck(sender, community, user) {
+  const b = await browser()
+  try {
+    const rx = await open(b, user, `${APP}/c/${community.id}`)
+    rx.on('console', (m) => ['error', 'warning'].includes(m.type()) && console.log(`[rx ${m.type()}]`, m.text().slice(0, 300)))
+    if (arg('rejoin-who', 'second') === 'first') {
+      // The first member (who started the MLS group) leaves and joins again.
+      await joinButton(rx).click()
+      await rx.getByText('End-to-end encrypted.').waitFor({ timeout: 20_000 })
+      const tx = sender.page
+      tx.on('console', (m) => m.type() === 'error' && console.log('[tx error]', m.text().slice(0, 300)))
+      for (let round = 1; round <= 3; round++) {
+        await tx.locator('.voice-room').getByRole('button', { name: 'Leave', exact: true }).click()
+        await wait(1_000)
+        await joinButton(tx).click()
+        const outcome = await Promise.race([
+          tx.getByText('End-to-end encrypted.').waitFor({ timeout: 20_000 }).then(() => 'encrypted'),
+          tx.getByText(/could not be encrypted/).waitFor({ timeout: 20_000 }).then(() => 'failed'),
+        ]).catch(() => 'timeout')
+        const before = await rx.evaluate('window.__ticks.heard.length')
+        await wait(2_000)
+        const heard = (await rx.evaluate('window.__ticks.heard.length')) - before
+        console.log(`${outcome === 'encrypted' && heard > 3 ? 'PASS' : 'FAIL'} first member rejoin ${round}: ${outcome}, ${heard} ticks in 2 s`)
+      }
+      return
+    }
+    for (let round = 1; round <= 3; round++) {
+      await joinButton(rx).click()
+      const outcome = await Promise.race([
+        rx.getByText('End-to-end encrypted.').waitFor({ timeout: 20_000 }).then(() => 'encrypted'),
+        rx.getByText(/could not be encrypted/).waitFor({ timeout: 20_000 }).then(() => 'failed'),
+      ]).catch(() => 'timeout')
+      const before = await rx.evaluate('window.__ticks.heard.length')
+      await wait(2_000)
+      const heard = (await rx.evaluate('window.__ticks.heard.length')) - before
+      console.log(`${outcome === 'encrypted' && heard > 3 ? 'PASS' : 'FAIL'} join ${round}: ${outcome}, ${heard} ticks in 2 s`)
+      await rx.locator('.voice-room').getByRole('button', { name: 'Leave', exact: true }).click()
+      await wait(1_000)
+    }
+  } finally {
+    await b.close()
+  }
+}
+
+/** Push-to-talk: nothing is heard before the keys are held, or after release. */
+async function pushToTalkCheck(sender, community, user) {
+  const b = await browser()
+  try {
+    const rx = await open(b, user, `${APP}/c/${community.id}`)
+    await joinButton(rx).click()
+    await rx.getByText('End-to-end encrypted.').waitFor({ timeout: 20_000 })
+    const heard = () => rx.evaluate('window.__ticks.heard.length')
+    await wait(3_000)
+    const before = await heard()
+    await sender.page.keyboard.down('Control')
+    await sender.page.keyboard.down('Shift')
+    await wait(3_000)
+    const held = (await heard()) - before
+    await sender.page.keyboard.up('Shift')
+    await sender.page.keyboard.up('Control')
+    await wait(1_000)
+    const released = await heard()
+    await wait(3_000)
+    const after = (await heard()) - released
+    const ok = before === 0 && held >= 5 && after === 0
+    console.log(
+      `${ok ? 'PASS' : 'FAIL'} push-to-talk: ${before} ticks heard before pressing, ` +
+        `${held} while holding Ctrl + Shift for 3 s, ${after} in 3 s after releasing`,
+    )
+  } finally {
+    await b.close()
+  }
+}
+
 async function listen(sender, community, user) {
   const out = join(fileURLToPath(new URL('.', import.meta.url)), 'recordings')
   mkdirSync(out, { recursive: true })
@@ -383,7 +496,8 @@ async function listen(sender, community, user) {
     ['clean', ''],
     ['loss-10', 'loss 10%'],
     ['loss-20', 'loss 20%'],
-  ]) {
+    ['uplink-loss-10', 'uplink-loss 10'],
+  ].filter(([label]) => !ONLY || ONLY.includes(label))) {
     process.stdout.write(`recording: ${label} ... `)
     const b = await browser()
     netem(network)
@@ -392,12 +506,21 @@ async function listen(sender, community, user) {
       await joinButton(rx).click()
       await rx.getByText('End-to-end encrypted.').waitFor({ timeout: 20_000 })
       await wait(2_000)
+      const s0 = await rx.evaluate('window.__inbound()')
       await rx.evaluate('window.__recordingStart()')
       await wait(20_000)
       const data = await rx.evaluate('window.__recordingWav()')
+      const s1 = await rx.evaluate('window.__inbound()')
       const file = join(out, `${label}.wav`)
       writeFileSync(file, Buffer.from(data, 'base64'))
-      console.log(file)
+      const lost = s1.lost - s0.lost
+      const pct = (a, b) => Math.round((a / Math.max(1, b)) * 1000) / 10
+      console.log(
+        `${file} (loss ${pct(lost, lost + s1.received - s0.received)}%, ` +
+          `concealed ${pct(s1.concealed - s0.concealed, s1.samples - s0.samples)}%, ` +
+          `NACKs sent ${s1.nacks - s0.nacks}, audio NACK negotiated ${s1.audioNack})
+  ${s1.opusLines}`,
+      )
     } finally {
       netem('')
       await b.close()
@@ -414,11 +537,38 @@ const txBrowser = await browser()
 const results = []
 try {
   const page = await open(txBrowser, owner, `${APP}/c/${community.id}`)
+  if (PTT) {
+    // The sender talks with push-to-talk, Ctrl + Shift (ADR 0013).
+    await page.evaluate(() =>
+      localStorage.setItem(
+        'nosilence.voice-settings',
+        JSON.stringify({ mode: 'push', pushKeys: ['Ctrl', 'Shift'] }),
+      ),
+    )
+    await page.reload()
+  }
   await joinButton(page).click()
   await page.getByText('End-to-end encrypted.').waitFor({ timeout: 20_000 })
   const sender = { user: owner, page }
   if (LISTEN) {
     await listen(sender, community, receiver)
+    process.exit(0)
+  }
+  if (PTT) {
+    await pushToTalkCheck(sender, community, receiver)
+    process.exit(0)
+  }
+  if (process.argv.includes('--settings-shot')) {
+    // A picture of the voice settings in push-to-talk mode, for checking the layout.
+    await page.goto(`${APP}/settings`)
+    await page.getByRole('radio', { name: /Push to talk/ }).click()
+    const file = join(fileURLToPath(new URL('.', import.meta.url)), 'recordings', 'settings.png')
+    await page.screenshot({ path: file, fullPage: true })
+    console.log(file)
+    process.exit(0)
+  }
+  if (REJOIN) {
+    await rejoinCheck(sender, community, receiver)
     process.exit(0)
   }
 
@@ -428,7 +578,8 @@ try {
     ['10% loss', 'loss 10%'],
     ['10% loss, 60 ms delay', 'delay 60ms 15ms distribution normal loss 10%'],
     ['20% loss', 'loss 20%'],
-  ]
+    ['10% uplink loss', 'uplink-loss 10'],
+  ].filter(([label]) => !ONLY || ONLY.includes(label))
   for (const [label, network] of scenarios) {
     process.stdout.write(`measuring: ${label} ... `)
     const r = await measure(label, network, sender, community, receiver)
@@ -444,13 +595,20 @@ console.table(results)
 const verdict = (ok) => (ok ? 'PASS' : 'FAIL')
 const clean = results.find((r) => r.scenario === 'clean')
 const loss10 = results.find((r) => r.scenario === '10% loss')
-console.log(`${verdict(clean.join_ms < 2000)} join < 2 s: ${clean.join_ms} ms`)
-console.log(`${verdict(clean.mouth_to_ear_p95_ms < 150)} mouth-to-ear p95 < 150 ms: ${clean.mouth_to_ear_p95_ms} ms (no microphone/speaker hardware delay)`)
-console.log(
-  `${verdict(clean['full-reconnect_p95_ms'] < 3000)} reconnect < 3 s (p95 of ${RECONNECTS}): ` +
-    `signal ${clean['signal-reconnect_p95_ms']} ms, full ${clean['full-reconnect_p95_ms']} ms ` +
-    `(full, each run: ${clean['full-reconnect_all_ms']} ms)`,
-)
-console.log(`${verdict(loss10.ticks_heard_pct >= 95)} intelligible at 10% loss: ${loss10.ticks_heard_pct}% of ticks heard, ${loss10.concealed_pct}% concealed`)
+// Verdicts for the scenarios that ran (`--only` may skip some).
+if (clean) {
+  console.log(`${verdict(clean.join_ms < 2000)} join < 2 s: ${clean.join_ms} ms`)
+  console.log(`${verdict(clean.mouth_to_ear_p95_ms < 150)} mouth-to-ear p95 < 150 ms: ${clean.mouth_to_ear_p95_ms} ms (no microphone/speaker hardware delay)`)
+  console.log(
+    `${verdict(clean['full-reconnect_p95_ms'] < 3000)} reconnect < 3 s (p95 of ${RECONNECTS}): ` +
+      `signal ${clean['signal-reconnect_p95_ms']} ms, full ${clean['full-reconnect_p95_ms']} ms ` +
+      `(full, each run: ${clean['full-reconnect_all_ms']} ms)`,
+  )
+}
+if (loss10) {
+  // Ticks are not speech: Opus FEC protects speech (SILK), so the share of
+  // invented audio here is higher than in the listening test (--listen).
+  console.log(`${verdict(loss10.ticks_heard_pct >= 95)} intelligible at 10% loss: ${loss10.ticks_heard_pct}% of ticks heard, ${loss10.concealed_pct}% concealed`)
+}
 writeFileSync(join(workdir, 'results.json'), JSON.stringify(results, null, 2))
 console.log(`results: ${join(workdir, 'results.json')}`)
