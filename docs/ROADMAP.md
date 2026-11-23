@@ -104,10 +104,6 @@ Postponed on purpose. Reviewed at the start of every phase.
 
 | Item | Decided in | Target |
 | --- | --- | --- |
-| Transferring community ownership, also offered when deleting an account (today owned communities are deleted with the account) | Phase 3 | Phase 8 |
-| Moderator role | Phase 3 | Phase 8 |
-| Renaming and deleting channels | Phase 3 | Phase 8 |
-| Editing messages | Phase 4 | Phase 8 |
 | Persistent device keys and verifying people across calls | Phase 5 | After the MVP |
 | Hiding who speaks when from the media server (audio level header, packet timing) | Phase 5 | After the MVP |
 | Global push-to-talk: registered shortcut (takes the key from other apps) or a listening keyboard hook (also mouse buttons; antivirus may flag it) | Phase 6 | Phase 9 |

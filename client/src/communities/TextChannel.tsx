@@ -11,6 +11,7 @@ import {
 import { ApiError } from '../api/http'
 import {
   deleteMessage,
+  editMessage,
   listMessages,
   markRead,
   sendMessage,
@@ -84,6 +85,8 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
   const [firstUnseenId, setFirstUnseenId] = useState<string>()
   // Sending too fast: a live countdown; sending stays off until it ends.
   const wait = useCountdown()
+  // The user's own message being edited, if any.
+  const [editingId, setEditingId] = useState<string>()
   const [waitReason, setWaitReason] = useState<string>()
   const firstId = messages?.[0]?.id
   const lastId = messages?.[messages.length - 1]?.id
@@ -214,6 +217,8 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
           update((ms) => merge(ms, [event.message]))
           if (event.message.author?.id !== currentUserId) incoming.current.push(event.message.id)
         }
+        if (event.type === 'message_updated' && event.message.channel_id === channel.id)
+          update((ms) => ms.map((m) => (m.id === event.message.id ? event.message : m)))
         if (event.type === 'message_deleted' && event.channel_id === channel.id)
           update((ms) => ms.filter((m) => m.id !== event.id))
         // A deleted account: its messages go, or stay as from "Deleted user".
@@ -374,6 +379,19 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
                   <time className="muted" dateTime={m.inserted_at}>
                     {new Date(m.inserted_at).toLocaleString()}
                   </time>
+                  {m.edited_at && <span className="muted">(edited)</span>}
+                  {m.author?.id === currentUserId &&
+                    editingId !== m.id &&
+                    (m.edits_left ?? 1) > 0 && (
+                      <button
+                        type="button"
+                        className="link-button"
+                        aria-label="Edit message"
+                        onClick={() => setEditingId(m.id)}
+                      >
+                        Edit
+                      </button>
+                    )}
                   {(canDeleteAny || m.author?.id === currentUserId) && (
                     <button
                       type="button"
@@ -385,8 +403,18 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
                     </button>
                   )}
                 </div>
-                {/* Rendered as text, never as HTML. */}
-                <p className="message-text">{m.text}</p>
+                {editingId === m.id ? (
+                  <EditBox
+                    message={m}
+                    onDone={(edited) => {
+                      if (edited) update((ms) => ms.map((x) => (x.id === edited.id ? edited : x)))
+                      setEditingId(undefined)
+                    }}
+                  />
+                ) : (
+                  /* Rendered as text, never as HTML. */
+                  <p className="message-text">{m.text}</p>
+                )}
               </li>
             ))}
           </ol>
@@ -421,5 +449,49 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
         }
       />
     </section>
+  )
+}
+
+/** Edits the user's own message in place: Enter saves, Escape cancels. */
+function EditBox({ message, onDone }: { message: Message; onDone: (edited?: Message) => void }) {
+  const [text, setText] = useState(message.text)
+  const [error, setError] = useState<string>()
+
+  async function save() {
+    const problem = messageError(text)
+    if (problem) return setError(problem)
+    if (text.trim() === message.text) return onDone()
+    try {
+      onDone(await editMessage(message.id, text.trim()))
+    } catch (e) {
+      setError(e instanceof ApiError ? (e.field('text') ?? e.message) : 'Could not save the edit.')
+    }
+  }
+
+  return (
+    <div className="edit-box">
+      <textarea
+        aria-label="Edit message"
+        value={text}
+        maxLength={MAX_MESSAGE}
+        rows={2}
+        autoFocus
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onDone()
+          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+            e.preventDefault()
+            void save()
+          }
+        }}
+      />
+      <span className="muted">
+        Enter to save, Escape to cancel.{' '}
+        {message.edits_left === 1
+          ? 'This is the last edit.'
+          : `${message.edits_left ?? 3} edits left.`}
+      </span>
+      <FormMessage text={error} />
+    </div>
   )
 }

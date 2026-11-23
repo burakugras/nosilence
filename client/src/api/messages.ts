@@ -10,6 +10,10 @@ export type Message = {
   /** Null when the author's account was deleted. */
   author: { id: string; display_name: string } | null
   inserted_at: string
+  /** Set when the author edited the text. */
+  edited_at?: string | null
+  /** How many more times the author can edit it (at most three edits). */
+  edits_left?: number
 }
 
 /** Where the user stopped reading the channel, or null if never. */
@@ -39,6 +43,10 @@ export const markRead = (channelId: string, messageId: string) =>
     // Often sent while leaving the channel or closing the page.
     keepalive: true,
   })
+
+export const editMessage = async (id: string, text: string) =>
+  (await request<{ message: Message }>(`/api/messages/${id}`, { method: 'PATCH', body: { text } }))
+    .message
 
 export const deleteMessage = (id: string) =>
   request<void>(`/api/messages/${id}`, { method: 'DELETE' })

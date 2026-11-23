@@ -13,6 +13,8 @@ export async function deleteAccount(body: {
   confirm_email: string
   password?: string
   delete_messages: boolean
+  /** Owned community id => up to three members to offer it to, in order (ADR 0012). */
+  hand_over?: Record<string, string[]>
 }) {
   await request<void>('/api/account', { method: 'DELETE', body })
   if (isDesktop) await clearSessionToken()

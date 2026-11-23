@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useState, type FormEvent } from 'react'
 import { useSubmit } from '../accounts/useSubmit'
-import { createCommunity, listCommunities, type CommunitySummary } from '../api/communities'
+import {
+  createCommunity,
+  listCommunities,
+  listOffers,
+  type CommunitySummary,
+  type OwnershipOffer,
+} from '../api/communities'
 import { Field, FormMessage } from '../components/Field'
 import { Link } from '../components/Link'
 import { navigate } from '../router'
@@ -10,6 +16,7 @@ import { collect, nameError } from '../validation'
 export function CommunitiesPage() {
   const [communities, setCommunities] = useState<CommunitySummary[]>()
   const [loadError, setLoadError] = useState<string>()
+  const [offers, setOffers] = useState<OwnershipOffer[]>([])
   const [name, setName] = useState('')
   const { busy, errors, message, run } = useSubmit()
 
@@ -17,6 +24,9 @@ export function CommunitiesPage() {
     listCommunities()
       .then(setCommunities)
       .catch(() => setLoadError('Could not load your communities.'))
+    listOffers()
+      .then(setOffers)
+      .catch(() => setOffers([]))
   }, [])
 
   function create(event: FormEvent) {
@@ -31,6 +41,12 @@ export function CommunitiesPage() {
     <section>
       <h2>Your communities</h2>
       <FormMessage text={loadError} />
+      {offers.map((o) => (
+        <p key={o.id} className="banner" role="status">
+          You are offered ownership of <Link to={`/c/${o.community.id}`}>{o.community.name}</Link>.
+          Open it to answer.
+        </p>
+      ))}
       {communities === undefined && !loadError && <p role="status">Loading…</p>}
       {communities?.length === 0 && (
         <p>You are not in any community yet. Create one, or open an invite link.</p>

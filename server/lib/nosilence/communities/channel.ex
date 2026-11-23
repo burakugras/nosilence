@@ -13,6 +13,8 @@ defmodule Nosilence.Communities.Channel do
     field :kind, :string, default: "voice"
     # Voice channels only; nil for text channels.
     field :capacity, :integer
+    # Order in the channel list, chosen by the owner.
+    field :position, :integer, default: 0
     belongs_to :community, Nosilence.Communities.Community
     timestamps(type: :utc_datetime)
   end

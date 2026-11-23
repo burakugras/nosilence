@@ -23,16 +23,35 @@ defmodule Nosilence.Privacy do
 
   @doc """
   Deletes the account. `attrs`: `"confirm_email"`, `"password"` (if the account
-  has one) and `"delete_messages"` (boolean). `:ok` or `{:error, field}`.
+  has one), `"delete_messages"` (boolean) and `"hand_over"`: community id =>
+  up to three member ids, in order, to offer an owned community to instead of
+  deleting it (ADR 0012). `:ok` or `{:error, field}`.
   """
   def delete_account(%User{} = user, attrs) do
+    hand_over = if is_map(attrs["hand_over"]), do: attrs["hand_over"], else: %{}
+
     with :ok <- Accounts.verify_deletion(user, attrs) do
-      owned = Communities.owned_communities(user)
+      {handed, owned} =
+        Communities.owned_communities(user)
+        |> Enum.split_with(&Map.has_key?(hand_over, &1.id))
+
       member_of = Communities.member_community_ids(user)
       rooms = Communities.voice_rooms_of(user)
 
-      {:ok, closed_rooms} =
+      result =
         Repo.transaction(fn ->
+          # Offered to the chosen members; ownerless until one of them accepts.
+          for %{id: id} <- handed do
+            case Nosilence.Communities.Succession.offer_on_account_deletion(
+                   user,
+                   id,
+                   hand_over[id]
+                 ) do
+              {:ok, _} -> :ok
+              {:error, _reason} -> Repo.rollback(:hand_over)
+            end
+          end
+
           closed =
             Enum.flat_map(owned, fn %{id: id} ->
               {:ok, %{voice_rooms: rooms}} = Communities.delete_community(user, id)
@@ -45,23 +64,35 @@ defmodule Nosilence.Privacy do
           closed
         end)
 
-      # Open pages in the other communities update at once: the user's messages
-      # turn into "Deleted user", or disappear if they asked for that.
-      messages_deleted = attrs["delete_messages"] == true
+      case result do
+        {:ok, closed_rooms} ->
+          after_deletion(user, attrs, member_of, handed, rooms, closed_rooms)
 
-      for id <- member_of do
-        Events.broadcast(id, "account_deleted", %{
-          user_id: user.id,
-          messages_deleted: messages_deleted
-        })
+        # Invalid candidates: nothing was deleted.
+        {:error, :hand_over} ->
+          {:error, :hand_over}
       end
-
-      # Outside the transaction: close owned rooms, leave the others, end live connections.
-      Voice.close_rooms(closed_rooms)
-      Voice.remove_from_rooms(rooms -- closed_rooms, user.id)
-      NosilenceWeb.Gateway.Socket.disconnect_user(user.id)
-      :ok
     end
+  end
+
+  defp after_deletion(user, attrs, member_of, handed, rooms, closed_rooms) do
+    # Open pages in the other communities update at once: the user's messages
+    # turn into "Deleted user", or disappear if they asked for that.
+    messages_deleted = attrs["delete_messages"] == true
+
+    for id <- member_of do
+      Events.broadcast(id, "account_deleted", %{
+        user_id: user.id,
+        messages_deleted: messages_deleted
+      })
+    end
+
+    # Outside the transaction: close owned rooms, leave the others, end live connections.
+    Voice.close_rooms(closed_rooms)
+    for %{id: id} <- handed, do: Events.broadcast(id, "member_removed", %{user_id: user.id})
+    Voice.remove_from_rooms(rooms -- closed_rooms, user.id)
+    NosilenceWeb.Gateway.Socket.disconnect_user(user.id)
+    :ok
   end
 
   @doc "Everything we hold about the user, as one map (served as a JSON download)."

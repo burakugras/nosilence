@@ -15,6 +15,7 @@ defmodule Nosilence.Application do
       Nosilence.RateLimit,
       Nosilence.Retention,
       Nosilence.Voice.Watchdog,
+      Nosilence.Communities.SuccessionWorker,
       NosilenceWeb.Gateway.Presence,
       # One process per voice channel in use, ordering its MLS group changes.
       {Registry, keys: :unique, name: Nosilence.Voice.GroupRegistry},

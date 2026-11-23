@@ -7,7 +7,9 @@ import {
   type DeletionPreview,
 } from '../api/account'
 import type { User } from '../api/accounts'
+import { listMembers, type Member } from '../api/communities'
 import { ApiError } from '../api/http'
+import { choosable } from '../communities/roles'
 import { Field, FormMessage } from '../components/Field'
 import { Link } from '../components/Link'
 
@@ -72,6 +74,8 @@ function DeleteAccount({ user, onDeleted }: Props) {
   const [confirmEmail, setConfirmEmail] = useState('')
   const [password, setPassword] = useState('')
   const [deleteMessages, setDeleteMessages] = useState(false)
+  // Owned community id => chosen members (empty: delete the community).
+  const [handOver, setHandOver] = useState<Record<string, string[]>>({})
   const [busy, setBusy] = useState(false)
   const [errors, setErrors] = useState<Record<string, string | undefined>>({})
   const [message, setMessage] = useState<string>()
@@ -98,6 +102,11 @@ function DeleteAccount({ user, onDeleted }: Props) {
         confirm_email: confirmEmail,
         ...(preview?.needs_password ? { password } : {}),
         delete_messages: deleteMessages,
+        hand_over: Object.fromEntries(
+          Object.entries(handOver)
+            .map(([id, picks]) => [id, picks.filter(Boolean)] as const)
+            .filter(([, picks]) => picks.length > 0),
+        ),
       })
       onDeleted()
     } catch (e) {
@@ -124,14 +133,26 @@ function DeleteAccount({ user, onDeleted }: Props) {
       <p>Download your data first if you want to keep a copy.</p>
       {owned.length > 0 && (
         <div role="alert">
-          <p>These communities you own will be deleted for everyone, with all their messages:</p>
-          <ul>
+          <p>
+            Communities you own: offer each to up to three members (asked in order, 72 hours each),
+            or it is deleted for everyone with all its messages. If nobody accepts, it is deleted
+            after a week's notice.
+          </p>
+          <ul className="plain-list">
             {owned.map((c) => (
-              <li key={c.id}>
-                {c.name}{' '}
-                <span className="muted">
-                  ({c.member_count} {c.member_count === 1 ? 'member' : 'members'})
+              <li key={c.id} className="hand-over">
+                <span>
+                  {c.name}{' '}
+                  <span className="muted">
+                    ({c.member_count} {c.member_count === 1 ? 'member' : 'members'})
+                  </span>
                 </span>
+                <HandOverPicker
+                  communityId={c.id}
+                  selfId={user.id}
+                  picks={handOver[c.id] ?? ['', '', '']}
+                  onChange={(picks) => setHandOver((h) => ({ ...h, [c.id]: picks }))}
+                />
               </li>
             ))}
           </ul>
@@ -172,5 +193,49 @@ function DeleteAccount({ user, onDeleted }: Props) {
       </button>
       <FormMessage text={message} />
     </form>
+  )
+}
+
+/** Up to three members of an owned community to offer it to; none means delete it. */
+function HandOverPicker({
+  communityId,
+  selfId,
+  picks,
+  onChange,
+}: {
+  communityId: string
+  selfId: string
+  picks: string[]
+  onChange: (picks: string[]) => void
+}) {
+  const [members, setMembers] = useState<Member[]>([])
+
+  useEffect(() => {
+    listMembers(communityId)
+      .then((list) => setMembers(list.filter((m) => m.user_id !== selfId)))
+      .catch(() => setMembers([]))
+  }, [communityId, selfId])
+
+  if (members.length === 0)
+    return <span className="muted">No other members: it will be deleted.</span>
+
+  return (
+    <span className="hand-over-picks">
+      {picks.map((value, i) => (
+        <select
+          key={i}
+          aria-label={`Choice ${i + 1} for this community`}
+          value={value}
+          onChange={(e) => onChange(picks.map((v, j) => (j === i ? e.target.value : v)))}
+        >
+          <option value="">{i === 0 ? 'Delete it' : '—'}</option>
+          {choosable(members, picks, i).map((m) => (
+            <option key={m.user_id} value={m.user_id}>
+              {m.display_name}
+            </option>
+          ))}
+        </select>
+      ))}
+    </span>
   )
 }

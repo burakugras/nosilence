@@ -21,6 +21,23 @@ defmodule NosilenceWeb.FallbackController do
   def call(conn, {:error, {:invalid, field}}),
     do: error(conn, :unprocessable_entity, "invalid #{field}")
 
+  def call(conn, {:error, :edit_limit}),
+    do:
+      error(
+        conn,
+        :unprocessable_entity,
+        "a message can be edited at most #{Nosilence.Messaging.max_edits()} times"
+      )
+
+  def call(conn, {:error, {:handover_cooldown, until}}),
+    do:
+      conn
+      |> put_status(:unprocessable_entity)
+      |> json(%{
+        error: "you can hand this community over again after #{DateTime.to_iso8601(until)}",
+        handover_available_at: until
+      })
+
   def call(conn, {:error, :room_full}), do: error(conn, :conflict, "this voice channel is full")
 
   def call(conn, {:error, :voice_unavailable}),

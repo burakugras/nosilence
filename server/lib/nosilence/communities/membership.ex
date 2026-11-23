@@ -7,7 +7,7 @@ defmodule Nosilence.Communities.Membership do
 
   @type t :: %__MODULE__{}
 
-  @roles ~w(owner member)
+  @roles ~w(owner moderator member)
 
   schema "memberships" do
     field :role, :string

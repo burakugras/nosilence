@@ -77,6 +77,47 @@ defmodule NosilenceWeb.CommunityController do
          do: send_resp(conn, :no_content, "")
   end
 
+  def set_role(conn, %{"id" => id, "user_id" => user_id} = params) do
+    with :ok <- Communities.set_role(conn.assigns.current_user, id, user_id, params["role"]),
+         do: send_resp(conn, :no_content, "")
+  end
+
+  @doc "Disconnects someone from the community's voice channels (moderators and owner)."
+  def disconnect_voice(conn, %{"id" => id, "user_id" => user_id}) do
+    with {:ok, target} <-
+           Communities.act_on(conn.assigns.current_user, id, user_id, :disconnect_voice) do
+      rooms = Communities.voice_room_ids(target.community_id)
+      Voice.remove_from_rooms(rooms, target.user_id)
+      for room <- rooms, do: Nosilence.Voice.Watchdog.left(room, target.user_id)
+      send_resp(conn, :no_content, "")
+    end
+  end
+
+  def rename_channel(conn, %{"channel_id" => channel_id} = params) do
+    case Communities.rename_channel(conn.assigns.current_user, channel_id, params["name"]) do
+      {:ok, ch} ->
+        json(conn, %{channel: channel_json(ch)})
+
+      {:error, %Ecto.Changeset{} = cs} ->
+        conn |> put_status(:unprocessable_entity) |> json(ChangesetJSON.errors(cs))
+
+      error ->
+        error
+    end
+  end
+
+  def delete_channel(conn, %{"channel_id" => channel_id}) do
+    with {:ok, channel} <- Communities.delete_channel(conn.assigns.current_user, channel_id) do
+      if channel.kind == "voice", do: Voice.close_rooms([channel.id])
+      send_resp(conn, :no_content, "")
+    end
+  end
+
+  def reorder_channels(conn, %{"id" => id} = params) do
+    with :ok <- Communities.reorder_channels(conn.assigns.current_user, id, params["ids"]),
+         do: send_resp(conn, :no_content, "")
+  end
+
   def create_channel(conn, %{"id" => id} = params) do
     case Communities.create_channel(conn.assigns.current_user, id, params) do
       {:ok, channel} ->

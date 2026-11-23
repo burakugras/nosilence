@@ -166,6 +166,43 @@ defmodule Nosilence.Messaging do
     end
   end
 
+  @max_edits 3
+
+  @doc "The number of times a message can be edited."
+  def max_edits, do: @max_edits
+
+  @doc """
+  Replaces the text of the user's own message, at most `max_edits/0` times.
+  The previous text is not kept.
+  """
+  def edit_message(%User{} = user, message_id, text) do
+    with {:ok, id} <- Ecto.UUID.cast(message_id),
+         %Message{author_id: author} = message when author == user.id <- Repo.get(Message, id),
+         {:ok, channel, _} <- text_channel(user, message.channel_id, :send_message),
+         {:ok, text} <- validate_text(text),
+         {1, [message]} <- count_edit(message.id, text) do
+      message = Map.put(message, :author, user)
+      Events.broadcast(channel.community_id, "message_updated", to_payload(message))
+      {:ok, message}
+    else
+      %Message{} -> {:error, :forbidden}
+      {0, []} -> {:error, :edit_limit}
+      {:error, %Ecto.Changeset{}} = error -> error
+      {:error, :forbidden} -> {:error, :forbidden}
+      _ -> {:error, :not_found}
+    end
+  end
+
+  # One statement, so two edits at once cannot both pass the limit.
+  defp count_edit(id, text) do
+    from(m in Message, where: m.id == ^id and m.edit_count < @max_edits, select: m)
+    # `log: false`: the query log would print the new text.
+    |> Repo.update_all(
+      [set: [content: text, edited_at: DateTime.utc_now()], inc: [edit_count: 1]],
+      log: false
+    )
+  end
+
   @doc "Deletes a message. Authors delete their own; the owner can delete any."
   def delete_message(%User{} = user, message_id) do
     with {:ok, _} <- Ecto.UUID.cast(message_id),
@@ -215,6 +252,8 @@ defmodule Nosilence.Messaging do
       channel_id: m.channel_id,
       # Only plain-text envelopes exist today; see `Message`.
       text: m.content,
+      edited_at: m.edited_at,
+      edits_left: @max_edits - m.edit_count,
       author: m.author && %{id: m.author.id, display_name: m.author.display_name},
       inserted_at: m.inserted_at
     }
