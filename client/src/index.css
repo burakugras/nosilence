@@ -469,3 +469,36 @@ kbd {
   border-radius: 3px;
   font-family: inherit;
 }
+
+/* Desktop app: version and updates, signed in or not (ADR 0014). */
+.update-corner {
+  position: fixed;
+  right: 0.75rem;
+  bottom: 0.5rem;
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  background: color-mix(in srgb, Canvas 90%, transparent);
+  opacity: 0.85;
+}
+
+.update-corner .link-button {
+  text-decoration: underline;
+}
+
+.back-button {
+  margin-right: 0.5rem;
+  padding: 0 0.5rem;
+  font: inherit;
+  font-size: 0.8em;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+/* Room for the update corner at the bottom. */
+main.app:has(.update-corner) {
+  padding-bottom: 2.5rem;
+}

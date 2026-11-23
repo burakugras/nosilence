@@ -12,6 +12,11 @@ defmodule NosilenceWeb.GoogleAuthController do
   listener) and `desktop_challenge` (PKCE, RFC 8252). The callback then sends the
   browser to `http://127.0.0.1:<port>/callback` with a one-time code instead of setting
   a cookie; the app redeems it with its verifier at `POST /api/auth/desktop/exchange`.
+
+  A first-time Google user of the desktop app gets a sign-up code instead: the verified
+  identity and the PKCE challenge, encrypted and valid for 15 minutes. The app shows the
+  sign-up form itself and sends the code, its verifier and the form to
+  `POST /api/auth/desktop/complete-signup` (ADR 0014).
   """
   use NosilenceWeb, :controller
 
@@ -23,6 +28,8 @@ defmodule NosilenceWeb.GoogleAuthController do
   @signup_cookie "_nosilence_google_signup"
   @flow_max_age 10 * 60
   @signup_max_age 15 * 60
+  @desktop_signup_salt "desktop google sign-up"
+  @desktop_signup_prefix "signup."
 
   def providers(conn, _params), do: json(conn, %{google: Google.enabled?()})
 
@@ -67,13 +74,8 @@ defmodule NosilenceWeb.GoogleAuthController do
           to_desktop(conn, desktop, code: code)
 
         {{:new, identity}, %{} = desktop} ->
-          # Creating the account happens in the browser; then the user signs in again in the app.
-          conn
-          |> put_resp_cookie(@signup_cookie, identity, cookie_opts(@signup_max_age))
-          |> to_desktop(desktop,
-            error: "signup_in_browser",
-            next: Application.fetch_env!(:nosilence, :app_url) <> "/complete-signup"
-          )
+          # The app shows the sign-up form itself (ADR 0014).
+          to_desktop(conn, desktop, code: desktop_signup_code(identity, desktop.challenge))
 
         {{:error, _}, %{} = desktop} ->
           to_desktop(conn, desktop, error: "google")
@@ -111,7 +113,17 @@ defmodule NosilenceWeb.GoogleAuthController do
   defp to_desktop(conn, %{port: port}, query),
     do: redirect(conn, external: "http://127.0.0.1:#{port}/callback?" <> URI.encode_query(query))
 
-  @doc "Desktop app: trades the one-time code (and its PKCE verifier) for a session token."
+  @doc """
+  Desktop app: trades the one-time code (and its PKCE verifier) for a session token,
+  or, for a first-time Google user, returns what the sign-up form shows.
+  """
+  def exchange(conn, %{"code" => @desktop_signup_prefix <> sealed, "verifier" => verifier}) do
+    case open_desktop_signup(sealed, verifier) do
+      {:ok, identity} -> json(conn, %{signup: %{email: identity.email, name: identity[:name]}})
+      :error -> expired(conn)
+    end
+  end
+
   def exchange(conn, %{"code" => code, "verifier" => verifier}) do
     case Accounts.redeem_desktop_handoff(code, verifier) do
       {:ok, user, token} ->
@@ -127,7 +139,57 @@ defmodule NosilenceWeb.GoogleAuthController do
     end
   end
 
-  def exchange(conn, _params),
+  def exchange(conn, _params), do: expired(conn)
+
+  @doc "Desktop app: creates the account of a first-time Google user and signs them in."
+  def complete_desktop(
+        conn,
+        %{"code" => @desktop_signup_prefix <> sealed, "verifier" => verifier} = params
+      ) do
+    with {:ok, identity} <- open_desktop_signup(sealed, verifier),
+         {:ok, user} <- Accounts.register_google_user(identity, params) do
+      conn
+      |> UserAuth.log_sign_in(user)
+      |> json(%{
+        user: %{id: user.id, email: user.email, display_name: user.display_name},
+        token: Accounts.create_session(user)
+      })
+    else
+      :error ->
+        expired(conn)
+
+      {:error, changeset} ->
+        conn |> put_status(:unprocessable_entity) |> json(ChangesetJSON.errors(changeset))
+    end
+  end
+
+  def complete_desktop(conn, _params), do: expired(conn)
+
+  # The identity is encrypted (the email does not travel readable through the
+  # loopback URL) and bound to the app's PKCE challenge, so only the app that
+  # started the sign-in can use it. Using it twice only fails: the Google
+  # account is then already registered.
+  defp desktop_signup_code(identity, challenge) do
+    @desktop_signup_prefix <>
+      Phoenix.Token.encrypt(NosilenceWeb.Endpoint, @desktop_signup_salt, %{
+        identity: identity,
+        challenge: challenge
+      })
+  end
+
+  defp open_desktop_signup(sealed, verifier) do
+    with {:ok, %{identity: identity, challenge: challenge}} <-
+           Phoenix.Token.decrypt(NosilenceWeb.Endpoint, @desktop_signup_salt, sealed,
+             max_age: @signup_max_age
+           ),
+         true <- Accounts.pkce_matches?(challenge, verifier) do
+      {:ok, identity}
+    else
+      _ -> :error
+    end
+  end
+
+  defp expired(conn),
     do: conn |> put_status(:unprocessable_entity) |> json(%{error: "sign-in expired, try again"})
 
   @doc "What the complete-signup page shows: the email and name Google gave us."

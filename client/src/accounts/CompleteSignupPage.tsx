@@ -14,29 +14,12 @@ import { useSubmit } from './useSubmit'
 /** After a first Google sign-in: choose a display name and confirm being 18+. */
 export function CompleteSignupPage({ onSignedIn }: { onSignedIn: (user: User) => void }) {
   const [pending, setPending] = useState<PendingGoogleSignup | null>()
-  const [displayName, setDisplayName] = useState('')
-  const [adult, setAdult] = useState(false)
-  const { busy, errors, message, run } = useSubmit()
 
   useEffect(() => {
     pendingGoogleSignup()
-      .then((p) => {
-        setPending(p)
-        setDisplayName((p.name ?? '').slice(0, 32))
-      })
+      .then(setPending)
       .catch(() => setPending(null))
   }, [])
-
-  function submit(event: FormEvent) {
-    event.preventDefault()
-    void run(
-      collect({
-        display_name: displayNameError(displayName),
-        age_confirmed: adult ? undefined : 'You must be 18 or older to use Nosilence.',
-      }),
-      async () => onSignedIn(await completeGoogleSignup(displayName.trim(), adult)),
-    )
-  }
 
   if (pending === undefined) return <p role="status">Loading…</p>
   if (pending === null) {
@@ -46,6 +29,43 @@ export function CompleteSignupPage({ onSignedIn }: { onSignedIn: (user: User) =>
         <p role="alert">This sign-up has expired. Please continue with Google again.</p>
         <Link to="/login">Back to sign in</Link>
       </section>
+    )
+  }
+
+  return (
+    <CompleteSignupForm
+      pending={pending}
+      complete={async (name, adult) => onSignedIn(await completeGoogleSignup(name, adult))}
+    />
+  )
+}
+
+/**
+ * The sign-up form of a first-time Google user, on the web page and inside the
+ * desktop app (ADR 0014).
+ */
+export function CompleteSignupForm({
+  pending,
+  complete,
+  onCancel,
+}: {
+  pending: PendingGoogleSignup
+  complete: (displayName: string, adult: boolean) => Promise<void>
+  /** Desktop app: back to the sign-in page without creating an account. */
+  onCancel?: () => void
+}) {
+  const [displayName, setDisplayName] = useState(() => (pending.name ?? '').slice(0, 32))
+  const [adult, setAdult] = useState(false)
+  const { busy, errors, message, run } = useSubmit()
+
+  function submit(event: FormEvent) {
+    event.preventDefault()
+    void run(
+      collect({
+        display_name: displayNameError(displayName),
+        age_confirmed: adult ? undefined : 'You must be 18 or older to use Nosilence.',
+      }),
+      () => complete(displayName.trim(), adult),
     )
   }
 
@@ -77,6 +97,13 @@ export function CompleteSignupPage({ onSignedIn }: { onSignedIn: (user: User) =>
         </button>
         <FormMessage text={message} />
       </form>
+      {onCancel && (
+        <p>
+          <button type="button" className="link-button" onClick={onCancel}>
+            Cancel
+          </button>
+        </p>
+      )}
     </section>
   )
 }

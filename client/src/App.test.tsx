@@ -2,6 +2,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { setPendingDesktopSignup } from './accounts/desktopSignup'
 
 vi.mock('./api/communities', () => ({
   listCommunities: () => Promise.resolve([{ id: 'c1', name: 'Ekip', role: 'owner' }]),
@@ -13,6 +14,21 @@ const user = { id: 'u1', email: 'burak@example.com', display_name: 'Burak' }
 
 describe('App', () => {
   afterEach(() => window.history.replaceState(null, '', '/'))
+
+  it('a desktop Google sign-up shows only its form, not the sign-in page', async () => {
+    const signedIn = { id: 'u9', email: 'new@example.com', display_name: 'Neo' }
+    setPendingDesktopSignup({
+      signup: { email: 'new@example.com', name: 'Neo' },
+      complete: () => Promise.resolve(signedIn),
+    })
+    render(<App loadUser={() => Promise.resolve(null)} />)
+
+    expect(await screen.findByText('Signed in with Google as new@example.com.')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Password')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(await screen.findByLabelText('Password')).toBeInTheDocument()
+  })
 
   it('shows the sign-in page when nobody is signed in', async () => {
     render(<App loadUser={() => Promise.resolve(null)} />)
@@ -36,6 +52,22 @@ describe('App', () => {
     window.history.replaceState(null, '', '/invite?token=abc')
     render(<App loadUser={() => Promise.resolve(null)} />)
     expect(await screen.findByText('Sign in to accept your invite.')).toBeInTheDocument()
+  })
+
+  it('a pasted invite link opens the invite (the desktop app has no address bar)', async () => {
+    render(<App loadUser={() => Promise.resolve(user)} />)
+    const field = await screen.findByLabelText('Invite link')
+    fireEvent.change(field, { target: { value: 'not a link' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Open invite' }))
+    expect(
+      await screen.findByText('Paste the whole invite link you were sent.'),
+    ).toBeInTheDocument()
+
+    const code = 'Q2hhbmdlTWVJbnRvQVJlYWxUb2tlbkZvclRlc3RzMTIz'
+    fireEvent.change(field, { target: { value: `http://127.0.0.1:5173/invite?token=${code}` } })
+    fireEvent.click(screen.getByRole('button', { name: 'Open invite' }))
+    expect(await screen.findByRole('heading', { name: 'Join Ekip?' })).toBeInTheDocument()
+    expect(window.location.search).toBe(`?token=${code}`)
   })
 
   it('shows the invite when signed in', async () => {

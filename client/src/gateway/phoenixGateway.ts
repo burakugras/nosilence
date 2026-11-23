@@ -3,7 +3,7 @@ import { Presence, Socket } from 'phoenix'
 import { fetchSocketTicket } from '../api/messages'
 import { ApiError } from '../api/http'
 import { socketUrl } from '../platform'
-import type { ConnectCommunity, OnlineMember, OpenVoiceTopic } from './types'
+import type { ConnectCommunity, MessageNotice, OnlineMember, OpenVoiceTopic } from './types'
 
 // Retry quickly at first so a short network drop recovers within the 3 s target.
 const RECONNECT_MS = [100, 500, 1000, 2000]
@@ -103,6 +103,29 @@ export const connectCommunity: ConnectCommunity = (communityId, listener) => {
         releaseSocket()
       }
     },
+  }
+}
+
+/**
+ * The user's own topic: messages others write in any of their communities, for
+ * desktop notifications (ADR 0014). Returns a function that stops listening.
+ */
+export function openUserTopic(userId: string, onNotice: (notice: MessageNotice) => void) {
+  let closed = false
+  let channel: ReturnType<Socket['channel']> | undefined
+  void acquireSocket().then((s) => {
+    if (closed) return releaseSocket()
+    channel = s.channel(`user:${userId}`)
+    channel.on('notify', (notice: MessageNotice) => onNotice(notice))
+    channel.join()
+  })
+  return () => {
+    if (closed) return
+    closed = true
+    if (channel) {
+      channel.leave()
+      releaseSocket()
+    }
   }
 }
 

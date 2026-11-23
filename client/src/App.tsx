@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useState, type ReactNode } from 'react'
-import { CompleteSignupPage } from './accounts/CompleteSignupPage'
+import { CompleteSignupForm, CompleteSignupPage } from './accounts/CompleteSignupPage'
+import { setPendingDesktopSignup, usePendingDesktopSignup } from './accounts/desktopSignup'
 import { ConfirmPage } from './accounts/ConfirmPage'
 import { AccountPage } from './accounts/AccountPage'
 import { LoginPage } from './accounts/LoginPage'
@@ -11,7 +12,11 @@ import { currentUser, signOut, type User } from './api/accounts'
 import { CommunitiesPage } from './communities/CommunitiesPage'
 import { CommunityPage } from './communities/CommunityPage'
 import { InvitePage } from './communities/InvitePage'
-import { navigate, useLocation } from './router'
+import { goBack, navigate, useCanGoBack, useLocation } from './router'
+import { isDesktop } from './platform'
+import { startMessageNotifications } from './notifications/notifications'
+import { checkOnStart } from './updates/updates'
+import { UpdateBanner, UpdateCorner } from './updates/UpdateViews'
 import { SettingsPage } from './voice/SettingsPage'
 
 type Props = {
@@ -24,12 +29,17 @@ export default function App({ loadUser = currentUser }: Props) {
   // undefined while loading, null when signed out
   const [user, setUser] = useState<User | null>()
   const { path, params } = useLocation()
+  const desktopSignup = usePendingDesktopSignup()
 
   useEffect(() => {
     loadUser()
       .then(setUser)
       .catch(() => setUser(null))
   }, [loadUser])
+
+  // Desktop app: notifications for others' messages while signed in (ADR 0014).
+  const userId = user?.id
+  useEffect(() => (userId ? startMessageNotifications(userId) : undefined), [userId])
 
   // Links from emails work whether or not the user is signed in.
   if (path === '/confirm')
@@ -58,19 +68,28 @@ export default function App({ loadUser = currentUser }: Props) {
       // An invite link opened while signed out continues after signing in.
       if (path !== '/invite') navigate('/', { replace: true })
     }
-    const page =
-      path === '/complete-signup' ? (
-        <CompleteSignupPage onSignedIn={onSignedIn} />
-      ) : path === '/register' ? (
-        <RegisterPage onSignedIn={onSignedIn} />
-      ) : path === '/forgot-password' ? (
-        <ForgotPasswordPage />
-      ) : (
-        <>
-          {path === '/invite' && <p>Sign in to accept your invite.</p>}
-          <LoginPage onSignedIn={onSignedIn} googleError={params.get('error')} />
-        </>
-      )
+    const page = desktopSignup ? (
+      <CompleteSignupForm
+        pending={desktopSignup.signup}
+        complete={async (name, adult) => {
+          const signedIn = await desktopSignup.complete(name, adult)
+          setPendingDesktopSignup(null)
+          onSignedIn(signedIn)
+        }}
+        onCancel={() => setPendingDesktopSignup(null)}
+      />
+    ) : path === '/complete-signup' ? (
+      <CompleteSignupPage onSignedIn={onSignedIn} />
+    ) : path === '/register' ? (
+      <RegisterPage onSignedIn={onSignedIn} />
+    ) : path === '/forgot-password' ? (
+      <ForgotPasswordPage />
+    ) : (
+      <>
+        {path === '/invite' && <p>Sign in to accept your invite.</p>}
+        <LoginPage onSignedIn={onSignedIn} googleError={params.get('error')} />
+      </>
+    )
     return <Shell>{page}</Shell>
   }
 
@@ -117,10 +136,21 @@ function Shell({
   onSignOut?: () => void
   children: ReactNode
 }) {
+  useEffect(checkOnStart, [])
+  const canGoBack = useCanGoBack()
   return (
     <main className="app">
+      {isDesktop && <UpdateBanner />}
       <header className="app-header">
-        <h1>Nosilence</h1>
+        <h1>
+          {/* The desktop app has no browser back button of its own. */}
+          {isDesktop && canGoBack && (
+            <button type="button" className="back-button" aria-label="Back" onClick={goBack}>
+              ←
+            </button>
+          )}
+          Nosilence
+        </h1>
         {user && (
           <p>
             <Link to="/settings">Settings</Link> <Link to="/account">{user.display_name}</Link>{' '}
@@ -131,6 +161,7 @@ function Shell({
         )}
       </header>
       {children}
+      {isDesktop && <UpdateCorner />}
     </main>
   )
 }

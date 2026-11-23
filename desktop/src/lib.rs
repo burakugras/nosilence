@@ -23,6 +23,11 @@ use tokio::net::TcpListener;
 const KEYRING_SERVICE: &str = "app.nosilence.desktop";
 const KEYRING_USER: &str = "session";
 const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+
+/// Ends the Google sign-in that is waiting for the browser (the user closed it).
+/// Starting another sign-in drops the previous sender, which ends that wait too.
+static CANCEL_SIGN_IN: std::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>> =
+    std::sync::Mutex::new(None);
 /// How long the client may take to leave a call cleanly before the app quits anyway.
 const QUIT_GRACE: Duration = Duration::from_millis(1500);
 
@@ -89,9 +94,15 @@ async fn google_sign_in(app: AppHandle, api_origin: String) -> Result<GoogleResu
         format!("{api_origin}/api/auth/google?desktop_port={port}&desktop_challenge={challenge}");
     open::that(&url).map_err(|e| e.to_string())?;
 
-    let result = tokio::time::timeout(SIGN_IN_TIMEOUT, wait_for_callback(&listener, &api_origin))
-        .await
-        .unwrap_or_else(|_| Ok(Query::error("timeout")))?;
+    let (cancel, cancelled) = tokio::sync::oneshot::channel();
+    if let Ok(mut slot) = CANCEL_SIGN_IN.lock() {
+        *slot = Some(cancel);
+    }
+    let result = tokio::select! {
+        waited = tokio::time::timeout(SIGN_IN_TIMEOUT, wait_for_callback(&listener, &api_origin)) =>
+            waited.unwrap_or_else(|_| Ok(Query::error("timeout")))?,
+        _ = cancelled => return Ok(GoogleResult::Error { error: "cancelled".into() }),
+    };
 
     // Bring the app back in front of the browser.
     if let Some(window) = app.get_webview_window("main") {
@@ -106,6 +117,14 @@ async fn google_sign_in(app: AppHandle, api_origin: String) -> Result<GoogleResu
             error: result.error.unwrap_or_else(|| "google".into()),
         },
     })
+}
+
+/// The user gave up on the browser: stop waiting and close the loopback listener.
+#[tauri::command]
+fn cancel_google_sign_in() {
+    if let Some(cancel) = CANCEL_SIGN_IN.lock().ok().and_then(|mut slot| slot.take()) {
+        let _ = cancel.send(());
+    }
 }
 
 #[derive(Default)]
@@ -216,11 +235,16 @@ fn show_main(app: &AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Signed updates from GitHub Releases, and restarting into them (ADR 0014).
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             load_token,
             store_token,
             clear_token,
             google_sign_in,
+            cancel_google_sign_in,
             request_quit,
             quit_now,
             ptt::set_push_to_talk

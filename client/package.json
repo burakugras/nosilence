@@ -20,6 +20,9 @@
   "dependencies": {
     "@livekit/components-react": "^2.9.25",
     "@tauri-apps/api": "^2.12.5",
+    "@tauri-apps/plugin-notification": "^2.8.1",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.14.1",
     "livekit-client": "2.24.1",
     "phoenix": "^1.8.17",
     "react": "^19.3.1",

@@ -64,3 +64,14 @@ export type OpenVoiceTopic = (
   params: () => object,
   handlers: VoiceTopicHandlers,
 ) => VoiceTopic
+
+/** A message someone else wrote in one of the user's communities (ADR 0014). */
+export type MessageNotice = {
+  message_id: string
+  community_id: string
+  community_name: string
+  channel_id: string
+  channel_name: string
+  author_name: string
+  text: string
+}

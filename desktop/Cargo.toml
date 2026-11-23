@@ -15,11 +15,18 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
+# Signed updates from GitHub Releases (ADR 0014) and restarting into them.
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+# Desktop notifications for new messages (ADR 0014).
+tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
+# tauri::generate_context! embeds the plugin configuration as JSON.
+serde_json = "1"
 # Session token in the OS credential store (Windows Credential Manager; macOS Keychain later).
 keyring = { version = "3", features = ["windows-native", "apple-native"] }
 # Google sign-in through the system browser (RFC 8252 loopback + PKCE).
-tokio = { version = "1", features = ["net", "time", "io-util"] }
+tokio = { version = "1", features = ["net", "time", "io-util", "sync", "macros"] }
 sha2 = "0.10"
 base64 = "0.22"
 getrandom = "0.3"

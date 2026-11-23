@@ -48,23 +48,48 @@ export async function signOut() {
 }
 
 const GOOGLE_ERRORS: Record<string, string> = {
-  signup_in_browser: 'Finish creating your account in the browser window, then sign in here again.',
+  // The user pressed Cancel: nothing to report.
+  cancelled: '',
   google_denied: 'Google sign-in was cancelled.',
   google_email: 'Your Google account has no verified email address.',
   timeout: 'Google sign-in took too long. Please try again.',
 }
 
-/** Desktop app: Google in the system browser, then a one-time code for a session. */
-export async function desktopGoogle(): Promise<User> {
+export type DesktopGoogleOutcome =
+  | { user: User }
+  /** A first-time Google user: the app shows the sign-up form, then calls `complete`. */
+  | {
+      signup: PendingGoogleSignup
+      complete: (displayName: string, adult: boolean) => Promise<User>
+    }
+
+/**
+ * Desktop app: Google in the system browser, then a one-time code for a session,
+ * or for a new account the sign-up form inside the app (ADR 0014).
+ */
+export async function desktopGoogle(): Promise<DesktopGoogleOutcome> {
   const result = await desktopGoogleSignIn()
   if ('error' in result)
     throw new ApiError(GOOGLE_ERRORS[result.error] ?? 'Google sign-in failed. Please try again.', 0)
-  const { user, token } = await request<{ user: User; token: string }>(
+  const reply = await request<{ user: User; token: string } | { signup: PendingGoogleSignup }>(
     '/api/auth/desktop/exchange',
     { method: 'POST', body: result },
   )
-  await saveSessionToken(token)
-  return user
+  if ('signup' in reply) {
+    return {
+      signup: reply.signup,
+      complete: async (display_name, age_confirmed) => {
+        const { user, token } = await request<{ user: User; token: string }>(
+          '/api/auth/desktop/complete-signup',
+          { method: 'POST', body: { ...result, display_name, age_confirmed } },
+        )
+        await saveSessionToken(token)
+        return user
+      },
+    }
+  }
+  await saveSessionToken(reply.token)
+  return { user: reply.user }
 }
 
 /** The signed-in user, or null when there is no valid session. */
