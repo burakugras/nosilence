@@ -42,6 +42,7 @@ const LISTEN = process.argv.includes('--listen')
 const TRACE = process.argv.includes('--trace')
 const PTT = process.argv.includes('--ptt')
 const REJOIN = process.argv.includes('--rejoin')
+const STAY = process.argv.includes('--stay')
 const ONLY = arg('only', '') ? arg('only', '').split(',') : null
 // How many times each reconnect is measured (median and p95 reported).
 const RECONNECTS = Number(arg('reconnects', '5'))
@@ -414,6 +415,33 @@ ${scenario}: ` + trace.map(([n, t]) => `${n}@${t - t0}`).join(' ') + ` heard@${b
 }
 
 // --- Listening test ---------------------------------------------------------
+/** Opening other pages keeps the call: still heard, still shown in the channel. */
+async function stayInCallCheck(sender, community, user) {
+  const b = await browser()
+  try {
+    const rx = await open(b, user, `${APP}/c/${community.id}`)
+    await joinButton(rx).click()
+    await rx.getByText('End-to-end encrypted.').waitFor({ timeout: 20_000 })
+    for (const [label, link] of [['settings', 'Settings'], ['account', user.name]]) {
+      await rx.getByRole('link', { name: link, exact: true }).click()
+      await wait(1_000)
+      const before = await rx.evaluate('window.__ticks.heard.length')
+      await wait(3_000)
+      const heard = (await rx.evaluate('window.__ticks.heard.length')) - before
+      const shown = await sender.page
+        .getByRole('list', { name: 'Voice channels' })
+        .getByText(user.name)
+        .count()
+      console.log(
+        `${heard >= 8 && shown > 0 ? 'PASS' : 'FAIL'} on ${label}: ${heard} ticks in 3 s, ` +
+          `${shown > 0 ? 'still' : 'not'} shown in the voice channel to the other person`,
+      )
+    }
+  } finally {
+    await b.close()
+  }
+}
+
 /** Leave and join again, twice: the call must be encrypted and audible each time. */
 async function rejoinCheck(sender, community, user) {
   const b = await browser()
@@ -569,6 +597,10 @@ try {
   }
   if (REJOIN) {
     await rejoinCheck(sender, community, receiver)
+    process.exit(0)
+  }
+  if (STAY) {
+    await stayInCallCheck(sender, community, receiver)
     process.exit(0)
   }
 

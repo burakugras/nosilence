@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   deleteChannel,
   deleteCommunity,
@@ -13,11 +13,12 @@ import {
   type Member,
 } from '../api/communities'
 import { ApiError } from '../api/http'
-import { requestChannelJoin, type VoiceJoin } from '../api/voice'
+import { requestChannelJoin } from '../api/voice'
 import { FormMessage } from '../components/Field'
 import { Link } from '../components/Link'
 import { useCommunityLive } from '../gateway/useCommunityLive'
 import { navigate } from '../router'
+import { startCall, useCall } from '../voice/call'
 import { CreateChannelForm } from './CreateChannelForm'
 import { InvitesSection } from './InvitesSection'
 import { MembersSection } from './MembersSection'
@@ -25,7 +26,6 @@ import { OwnershipSection } from './OwnershipSection'
 import { TextChannel } from './TextChannel'
 
 // LiveKit is large; load it only when the user joins a channel.
-const VoiceRoom = lazy(() => import('../voice/VoiceRoom').then((m) => ({ default: m.VoiceRoom })))
 
 type Props = {
   communityId: string
@@ -37,7 +37,9 @@ type Loaded = { community: CommunitySummary; channels: Channel[] }
 
 export function CommunityPage({ communityId, currentUserId, join = requestChannelJoin }: Props) {
   const [data, setData] = useState<Loaded | null>()
-  const [voice, setVoice] = useState<{ join: VoiceJoin; channel: Channel; startedAt: number }>()
+  // The call lives in the app (voice/call.ts), so it survives leaving this page.
+  const call = useCall()
+  const inCallHere = call?.communityId === communityId ? call : null
   const [joining, setJoining] = useState<string>()
   const [message, setMessage] = useState<string>()
   const [textId, setTextId] = useState<string>()
@@ -64,12 +66,9 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
   useEffect(load, [load])
 
   // Removed from the community, or it was deleted: show "not found" at once.
-  const onRemoved = useCallback(() => {
-    setVoice(undefined)
-    setData(null)
-  }, [])
+  const onRemoved = useCallback(() => setData(null), [])
   const live = useCommunityLive(communityId, onRemoved)
-  const { setVoiceChannel, subscribe } = live
+  const { subscribe } = live
 
   // The text channel on screen (the chosen one, or the first).
   const openTextId = textId ?? data?.channels.find((c) => c.kind === 'text')?.id
@@ -120,18 +119,20 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
     setMessage(undefined)
     const startedAt = performance.now()
     try {
-      setVoice({ join: await join(channel.id), channel, startedAt })
+      const granted = await join(channel.id)
+      startCall({
+        communityId,
+        communityName: data?.community.name ?? '',
+        channel,
+        join: granted,
+        startedAt,
+      })
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : 'Could not join the channel.')
     } finally {
       setJoining(undefined)
     }
   }
-
-  const leaveVoice = useCallback(() => {
-    setVoice(undefined)
-    setVoiceChannel(null)
-  }, [setVoiceChannel])
 
   if (data === undefined) return <p role="status">Loading…</p>
   if (data === null) {
@@ -215,25 +216,11 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
       </p>
       <h2>{community.name}</h2>
 
-      {voice && (
-        <Suspense fallback={<p>Connecting…</p>}>
-          <VoiceRoom
-            key={voice.channel.id}
-            join={voice.join}
-            channelId={voice.channel.id}
-            joinStartedAt={voice.startedAt}
-            title={`${community.name} · ${voice.channel.name}`}
-            onConnected={() => setVoiceChannel(voice.channel.id)}
-            onLeave={leaveVoice}
-          />
-        </Suspense>
-      )}
-
       <h3>Voice channels</h3>
       <ul className="plain-list" aria-label="Voice channels">
         {voiceChannels.map((channel) => {
           const inside = live.online.filter((m) => m.voice_channel_id === channel.id)
-          const current = voice?.channel.id === channel.id
+          const current = inCallHere?.channel.id === channel.id
           return (
             <li key={channel.id}>
               <span>

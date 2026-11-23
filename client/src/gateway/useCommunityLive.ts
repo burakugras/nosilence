@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { connectCommunity } from './phoenixGateway'
+import { sharing } from './sharedConnections'
 import type { CommunityConnection, ConnectCommunity, LiveEvent, OnlineMember } from './types'
 
 /** Tests provide a fake here instead of a real WebSocket. */
@@ -17,7 +18,8 @@ export type CommunityLive = {
 }
 
 export function useCommunityLive(communityId: string, onRemoved: () => void): CommunityLive {
-  const connect = useContext(GatewayContext)
+  // Shared with an ongoing call in the same community (see sharing()).
+  const connect = sharing(useContext(GatewayContext))
   const [online, setOnline] = useState<OnlineMember[]>([])
   const [generation, setGeneration] = useState(0)
   const connection = useRef<CommunityConnection>(undefined)

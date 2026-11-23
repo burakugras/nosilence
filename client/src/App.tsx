@@ -17,6 +17,8 @@ import { isDesktop } from './platform'
 import { startMessageNotifications } from './notifications/notifications'
 import { checkOnStart } from './updates/updates'
 import { UpdateBanner, UpdateCorner } from './updates/UpdateViews'
+import { ActiveCall } from './voice/ActiveCall'
+import { endCall } from './voice/call'
 import { SettingsPage } from './voice/SettingsPage'
 
 type Props = {
@@ -40,6 +42,10 @@ export default function App({ loadUser = currentUser }: Props) {
   // Desktop app: notifications for others' messages while signed in (ADR 0014).
   const userId = user?.id
   useEffect(() => (userId ? startMessageNotifications(userId) : undefined), [userId])
+  // Signed out (or the session ended): the call ends with it.
+  useEffect(() => {
+    if (!userId) endCall()
+  }, [userId])
 
   // Links from emails work whether or not the user is signed in.
   if (path === '/confirm')
@@ -122,6 +128,8 @@ export default function App({ loadUser = currentUser }: Props) {
         navigate('/login', { replace: true })
       }}
     >
+      {/* Above every page, so moving around the app keeps the call. */}
+      <ActiveCall />
       {page}
     </Shell>
   )
