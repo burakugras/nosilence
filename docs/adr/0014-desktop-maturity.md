@@ -63,6 +63,14 @@ an invite"). Waiting for the browser during Google sign-in can be cancelled (the
 user may close the browser), and starting again cancels a forgotten wait. While a
 desktop sign-up is pending, the app shows only its form, not the sign-in page.
 
+**A call belongs to the app, not to a page (fix after phase 10).** The call used to
+live inside the community page, so the Back button or opening settings ended it.
+The call is now app state (`voice/call.ts`) shown above every page, and the
+community's live connection is shared (`gateway/sharedConnections.ts`) between the
+page and the call: Phoenix allows a topic once per socket, and the call keeps the
+user shown in the voice channel while the page is closed. Leaving, joining another
+channel, being removed from the community or signing out ends it.
+
 ## Consequences
 
 - Burak must keep the private update key safe: if it is lost, installed apps can no

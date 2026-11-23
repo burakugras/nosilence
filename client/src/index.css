@@ -502,3 +502,10 @@ kbd {
 main.app:has(.update-corner) {
   padding-bottom: 2.5rem;
 }
+
+/* The ongoing call, above every page (voice/ActiveCall.tsx). */
+.active-call {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+}

@@ -28,6 +28,7 @@ npm run measure              # the four targets, about 3 minutes
 node netlab.mjs --listen     # recordings/*.wav, with loss and concealed audio per scenario
 node netlab.mjs --ptt        # push-to-talk: silent until Ctrl + Shift is held
 node netlab.mjs --rejoin     # leave and join again 3 times (--rejoin-who first: the group's founder)
+node netlab.mjs --stay       # the call goes on while the listener opens other pages
 node netlab.mjs --settings-shot  # recordings/settings.png, the voice settings page
 ```
 
