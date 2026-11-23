@@ -6,6 +6,7 @@ import App from './App'
 vi.mock('./api/communities', () => ({
   listCommunities: () => Promise.resolve([{ id: 'c1', name: 'Ekip', role: 'owner' }]),
   previewInvite: () => Promise.resolve({ id: 'c1', name: 'Ekip' }),
+  listOffers: () => Promise.resolve([]),
 }))
 
 const user = { id: 'u1', email: 'burak@example.com', display_name: 'Burak' }

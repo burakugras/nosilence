@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AccountPage } from './AccountPage'
 
@@ -15,6 +15,14 @@ vi.mock('../api/account', () => ({
     return Promise.resolve()
   },
   downloadMyData: () => Promise.resolve(),
+}))
+vi.mock('../api/communities', () => ({
+  listMembers: () =>
+    Promise.resolve([
+      { user_id: 'u1', display_name: 'Burak', role: 'owner' },
+      { user_id: 'u2', display_name: 'Ayşe', role: 'moderator' },
+      { user_id: 'u3', display_name: 'Cem', role: 'member' },
+    ]),
 }))
 
 const user = { id: 'u1', email: 'burak@example.com', display_name: 'Burak' }
@@ -41,8 +49,34 @@ describe('AccountPage', () => {
 
     await vi.waitFor(() => expect(onDeleted).toHaveBeenCalled())
     expect(deleted).toEqual([
-      { confirm_email: 'BURAK@example.com', password: 'secret', delete_messages: false },
+      {
+        confirm_email: 'BURAK@example.com',
+        password: 'secret',
+        delete_messages: false,
+        hand_over: {},
+      },
     ])
+  })
+
+  it('offers an owned community to the chosen members, in order', async () => {
+    render(<AccountPage user={user} onDeleted={() => {}} />)
+    const first = await screen.findByRole('combobox', { name: 'Choice 1 for this community' })
+    // The user is not offered their own community.
+    expect(screen.queryAllByRole('option', { name: 'Burak' })).toHaveLength(0)
+    fireEvent.change(first, { target: { value: 'u3' } })
+    const second = screen.getByRole('combobox', { name: 'Choice 2 for this community' })
+    // Cem is already the first choice.
+    expect(within(second).queryByRole('option', { name: 'Cem' })).toBeNull()
+    fireEvent.change(second, { target: { value: 'u2' } })
+
+    fireEvent.change(screen.getByLabelText('Type your email to confirm'), {
+      target: { value: 'burak@example.com' },
+    })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Delete my account' }))
+
+    await vi.waitFor(() => expect(deleted).toHaveLength(1))
+    expect(deleted[0]).toMatchObject({ hand_over: { c1: ['u3', 'u2'] } })
   })
 
   it('asks for the exact email before deleting', async () => {

@@ -19,6 +19,11 @@ defmodule NosilenceWeb.PrivacyController do
         |> put_status(:unprocessable_entity)
         |> json(%{errors: %{confirm_email: ["does not match your email"]}})
 
+      {:error, :hand_over} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{errors: %{hand_over: ["choose up to three members of each community"]}})
+
       {:error, :password} ->
         conn
         |> put_status(:unprocessable_entity)

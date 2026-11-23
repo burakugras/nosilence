@@ -371,3 +371,48 @@ body {
   color: #fff;
   background: #4f46e5;
 }
+
+/* Community management */
+.banner {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid #4f46e5;
+  background: color-mix(in srgb, #4f46e5 8%, transparent);
+}
+
+.danger-banner {
+  border-left-color: #c62828;
+  background: color-mix(in srgb, #c62828 8%, transparent);
+}
+
+.channel-tools {
+  margin-left: 0.5rem;
+  font-size: 0.85em;
+}
+
+.channel-tools .link-button {
+  margin-left: 0.25rem;
+}
+
+.stack-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.edit-box textarea {
+  width: 100%;
+  font: inherit;
+  padding: 0.4rem;
+}
+
+.hand-over {
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.hand-over-picks {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}

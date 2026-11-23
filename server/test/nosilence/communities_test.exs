@@ -217,7 +217,7 @@ defmodule Nosilence.CommunitiesTest do
                Communities.list_members(owner, c.id)
 
       assert {:error, :forbidden} = Communities.remove_member(member, c.id, owner.id)
-      assert {:error, :not_found} = Communities.remove_member(owner, c.id, owner.id)
+      assert {:error, :forbidden} = Communities.remove_member(owner, c.id, owner.id)
       assert {:ok, %{voice_rooms: [_]}} = Communities.remove_member(owner, c.id, member.id)
       assert {:error, :not_found} = Communities.get_community(member, c.id)
     end

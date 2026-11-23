@@ -17,6 +17,10 @@ export type LiveEvent =
   | { type: 'member_removed'; user_id: string }
   | { type: 'account_deleted'; user_id: string; messages_deleted: boolean }
   | { type: 'channel_created'; channel: Channel }
+  | { type: 'channels_changed' }
+  | { type: 'member_updated'; user_id: string; role: string }
+  | { type: 'ownership_changed' }
+  | { type: 'message_updated'; message: Message }
 
 export type CommunityListener = {
   presence: (members: OnlineMember[]) => void

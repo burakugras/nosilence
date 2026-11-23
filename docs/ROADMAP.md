@@ -67,9 +67,32 @@ webhooks for voice presence.
 **Done:** all four performance targets are measured and met:
 mouth-to-ear p95 < 150 ms, join < 2 s, reconnect < 3 s, intelligible speech at 10% packet loss.
 
-### Phase 8: First external test (M)
+Burak decided on 2026-11-23 that renting servers and the legal review come last: they
+mean releasing the app. Development phases 8 to 11 come first.
+
+### Phase 8: Community management (M)
+Transferring ownership (also when deleting an account), a moderator role, renaming,
+deleting and ordering channels, editing messages.
+**Done:** a community can be run without its owner doing everything, and handed over.
+
+### Phase 9: Voice quality and control (M)
+Loss protection that works with E2EE, the two-speed full reconnect, push-to-talk,
+choosing microphone and speaker, input level.
+**Done:** speech stays clear at 10% loss without guessing most lost audio; the chosen
+devices and push-to-talk work on web and desktop.
+
+### Phase 10: Desktop maturity (M)
+First Google sign-up inside the app, automatic updates from GitHub Releases (signed),
+desktop notifications.
+**Done:** a new version reaches an installed app without reinstalling by hand.
+
+### Phase 11: Social features (L)
+Direct and group messages, friends, profile picture and status, mentions and reactions.
+**Done:** people can find each other and talk outside communities.
+
+### Phase 12: Release (M)
 Server hosting, HTTPS, TURN, backups, legal texts with legal review, in-app
-"Source code" link (AGPL), security review.
+"Source code" link (AGPL), security review, code signing, production addresses.
 **Done:** a closed test with real users has taken place.
 
 ## After the MVP
@@ -81,28 +104,24 @@ Postponed on purpose. Reviewed at the start of every phase.
 
 | Item | Decided in | Target |
 | --- | --- | --- |
-| Transferring community ownership, also offered when deleting an account (today owned communities are deleted with the account) | Phase 3 | Before Phase 8 |
-| Moderator role | Phase 3 | Before Phase 8 |
-| Renaming and deleting channels | Phase 3 | Before Phase 8 |
-| Editing messages | Phase 4 | Before Phase 8 |
 | Persistent device keys and verifying people across calls | Phase 5 | After the MVP |
 | Hiding who speaks when from the media server (audio level header, packet timing) | Phase 5 | After the MVP |
-| Global push-to-talk: registered shortcut (takes the key from other apps) or a listening keyboard hook (also mouse buttons; antivirus may flag it) | Phase 6 | Decide before Phase 8 |
-| Code signing for the Windows installer (SmartScreen warning until then) | Phase 6 | Phase 8 |
-| Production server address in `client/.env.desktop` and the desktop CSP | Phase 6 | Phase 8 |
-| Automatic updates for the desktop app: Tauri updater with a signed update (key kept by Burak, copy in GitHub Secrets), releases on GitHub, check on start and a "Check for updates" button | Phase 6 | Phase 8 |
-| Finishing a first Google sign-up inside the desktop app (done in the browser for now) | Phase 6 | Before Phase 8 |
+| Global push-to-talk: registered shortcut (takes the key from other apps) or a listening keyboard hook (also mouse buttons; antivirus may flag it) | Phase 6 | Phase 9 |
+| Code signing for the Windows installer (SmartScreen warning until then) | Phase 6 | Phase 12 |
+| Production server address in `client/.env.desktop` and the desktop CSP | Phase 6 | Phase 12 |
+| Automatic updates for the desktop app: Tauri updater with a signed update (key kept by Burak, copy in GitHub Secrets), releases on GitHub, check on start and a "Check for updates" button | Phase 6 | Phase 10 |
+| Finishing a first Google sign-up inside the desktop app (done in the browser for now) | Phase 6 | Phase 10 |
 | macOS app: check WebKit (WKWebView) with microphone and E2EE first | Phase 6 | After the MVP |
-| Disk encryption for the database and backups | Phase 4 | Phase 8 |
-| Legal review of retention periods (traffic logs 1 year, metadata 30 days) | Phase 0 | Phase 8 |
-| Hosting choice (VPS) | Phase 0 | Phase 8 |
+| Disk encryption for the database and backups | Phase 4 | Phase 12 |
+| Legal review of retention periods (traffic logs 1 year, metadata 30 days) | Phase 0 | Phase 12 |
+| Hosting choice (VPS) | Phase 0 | Phase 12 |
 | Contributor licence agreement before accepting outside contributions | Phase 0 | First outside contribution |
 | Whether to move to `AGPL-3.0-or-later` | Phase 0 | When a new AGPL version is published |
 | End-to-end encrypted text messages | Phase 0 | After the MVP |
-| Behind a reverse proxy, rate limits and traffic records need the real client address (trusted `X-Forwarded-For`) | Phase 7a | Phase 8 |
-| Restricted access to traffic records, with every access logged; a way to answer lawful requests | Phase 7a | Phase 8 |
+| Behind a reverse proxy, rate limits and traffic records need the real client address (trusted `X-Forwarded-For`) | Phase 7a | Phase 12 |
+| Restricted access to traffic records, with every access logged; a way to answer lawful requests | Phase 7a | Phase 12 |
 | Re-check ignored Rust advisories (`.cargo/audit.toml`) when openmls or Tauri are updated | Phase 7a | Every dependency update |
-| Loss protection that works with E2EE: LiveKit disables RED when E2EE is on; our own redundancy inside the encrypted frame | Phase 7b | Before Phase 8 |
-| Investigate why half of LiveKit full reconnects take about 2 s instead of 0.3 s | Phase 7b | Before Phase 8 |
+| Loss protection that works with E2EE: LiveKit disables RED when E2EE is on; our own redundancy inside the encrypted frame | Phase 7b | Phase 9 |
+| Investigate why half of LiveKit full reconnects take about 2 s instead of 0.3 s | Phase 7b | Phase 9 |
 | Run tools/netlab on a schedule (nightly) on a dedicated machine | Phase 7b | After the MVP |
-| Production webhook URL in the LiveKit configuration | Phase 7b | Phase 8 |
+| Production webhook URL in the LiveKit configuration | Phase 7b | Phase 12 |

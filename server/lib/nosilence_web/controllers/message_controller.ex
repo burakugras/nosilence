@@ -28,6 +28,11 @@ defmodule NosilenceWeb.MessageController do
     end
   end
 
+  def update(conn, %{"id" => id} = params) do
+    with {:ok, message} <- Messaging.edit_message(conn.assigns.current_user, id, params["text"]),
+         do: json(conn, %{message: Messaging.to_payload(message)})
+  end
+
   def read(conn, %{"channel_id" => channel_id, "message_id" => message_id}) do
     with :ok <- Messaging.mark_read(conn.assigns.current_user, channel_id, message_id),
          do: send_resp(conn, :no_content, "")

@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  deleteChannel,
   deleteCommunity,
+  disconnectVoice,
   getCommunity,
   leaveCommunity,
+  renameChannel,
+  reorderChannels,
   type Channel,
   type CommunitySummary,
+  type Member,
 } from '../api/communities'
 import { ApiError } from '../api/http'
 import { requestChannelJoin, type VoiceJoin } from '../api/voice'
@@ -16,6 +21,7 @@ import { navigate } from '../router'
 import { CreateChannelForm } from './CreateChannelForm'
 import { InvitesSection } from './InvitesSection'
 import { MembersSection } from './MembersSection'
+import { OwnershipSection } from './OwnershipSection'
 import { TextChannel } from './TextChannel'
 
 // LiveKit is large; load it only when the user joins a channel.
@@ -36,6 +42,8 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
   const [message, setMessage] = useState<string>()
   const [textId, setTextId] = useState<string>()
   const [membersKey, setMembersKey] = useState(0)
+  const [members, setMembers] = useState<Member[]>([])
+  const [ownershipKey, setOwnershipKey] = useState(0)
   // Unread messages per text channel (ADR 0010): from the server on load, then
   // counted live for the other channels; the open channel reports its own.
   const [unread, setUnread] = useState<Record<string, number>>({})
@@ -80,6 +88,13 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
           }))
         if (event.type === 'member_joined' || event.type === 'member_removed')
           setMembersKey((k) => k + 1)
+        if (event.type === 'member_updated') {
+          setMembersKey((k) => k + 1)
+          // Our own role changed: reload what we may do here.
+          if (event.user_id === currentUserId) load()
+        }
+        if (event.type === 'channels_changed') load()
+        if (event.type === 'ownership_changed') setOwnershipKey((k) => k + 1)
         if (event.type === 'channel_created')
           setData((d) =>
             d && !d.channels.some((c) => c.id === event.channel.id)
@@ -87,7 +102,7 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
               : d,
           )
       }),
-    [subscribe, openTextId, currentUserId],
+    [subscribe, openTextId, currentUserId, load],
   )
 
   const reportUnread = useCallback(
@@ -130,7 +145,65 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
   }
 
   const { community, channels } = data
-  const isOwner = community.role === 'owner'
+  const myRole = community.role
+  const isOwner = myRole === 'owner'
+  const canModerate = myRole !== 'member'
+
+  // Owner: move a channel up or down among channels of its kind.
+  async function move(channel: Channel, step: -1 | 1) {
+    const same = channels.filter((c) => c.kind === channel.kind)
+    const i = same.findIndex((c) => c.id === channel.id)
+    const other = same[i + step]
+    if (!other) return
+    const ids = channels.map((c) => c.id)
+    const a = ids.indexOf(channel.id)
+    const b = ids.indexOf(other.id)
+    ;[ids[a], ids[b]] = [ids[b], ids[a]]
+    await reorderChannels(community.id, ids).catch(() => setMessage('Could not move the channel.'))
+  }
+
+  async function rename(channel: Channel) {
+    const name = window.prompt('New channel name', channel.name)?.trim()
+    if (!name || name === channel.name) return
+    await renameChannel(channel.id, name).catch((e) =>
+      setMessage(e instanceof ApiError ? e.message : 'Could not rename the channel.'),
+    )
+  }
+
+  async function remove(channel: Channel) {
+    const what = channel.kind === 'text' ? ' and all its messages' : ''
+    if (!window.confirm(`Delete the channel "${channel.name}"${what}? This cannot be undone.`))
+      return
+    await deleteChannel(channel.id).catch(() => setMessage('Could not delete the channel.'))
+  }
+
+  const channelTools = (channel: Channel) =>
+    isOwner && (
+      <span className="channel-tools">
+        <button
+          type="button"
+          className="link-button"
+          aria-label={`Move ${channel.name} up`}
+          onClick={() => void move(channel, -1)}
+        >
+          ↑
+        </button>
+        <button
+          type="button"
+          className="link-button"
+          aria-label={`Move ${channel.name} down`}
+          onClick={() => void move(channel, 1)}
+        >
+          ↓
+        </button>
+        <button type="button" className="link-button" onClick={() => void rename(channel)}>
+          Rename
+        </button>
+        <button type="button" className="link-button" onClick={() => void remove(channel)}>
+          Delete
+        </button>
+      </span>
+    )
   const voiceChannels = channels.filter((c) => c.kind === 'voice')
   const textChannels = channels.filter((c) => c.kind === 'text')
   const textChannel = textChannels.find((c) => c.id === textId) ?? textChannels[0]
@@ -171,9 +244,32 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
                 {inside.length > 0 && (
                   <span className="voice-members">
                     {' '}
-                    {inside.map((m) => m.display_name).join(', ')}
+                    {inside.map((m, i) => (
+                      <span key={m.id}>
+                        {i > 0 && ', '}
+                        {m.display_name}
+                        {canModerate && m.id !== currentUserId && (
+                          <button
+                            type="button"
+                            className="link-button"
+                            aria-label={`Disconnect ${m.display_name}`}
+                            title="Disconnect from voice"
+                            onClick={() =>
+                              void disconnectVoice(community.id, m.id).catch((e) =>
+                                setMessage(
+                                  e instanceof ApiError ? e.message : 'Could not disconnect.',
+                                ),
+                              )
+                            }
+                          >
+                            ×
+                          </button>
+                        )}
+                      </span>
+                    ))}
                   </span>
                 )}
+                {channelTools(channel)}
               </span>
               <button
                 type="button"
@@ -200,6 +296,7 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
             >
               #{channel.name}
             </button>
+            {channelTools(channel)}
             {(unread[channel.id] ?? 0) > 0 && (
               <span className="unread-count" aria-label={`${unread[channel.id]} unread`}>
                 {unread[channel.id] >= 100 ? '99+' : unread[channel.id]}
@@ -213,7 +310,7 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
           key={textChannel.id}
           channel={textChannel}
           currentUserId={currentUserId}
-          canDeleteAny={isOwner}
+          canDeleteAny={canModerate}
           live={live}
           onUnreadChange={reportUnread}
         />
@@ -223,11 +320,20 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
 
       <MembersSection
         communityId={community.id}
-        isOwner={isOwner}
+        myRole={myRole}
         online={online}
         refreshKey={membersKey}
+        onLoaded={setMembers}
       />
-      {isOwner && <InvitesSection communityId={community.id} />}
+      {canModerate && <InvitesSection communityId={community.id} />}
+      <OwnershipSection
+        community={community}
+        myRole={myRole}
+        currentUserId={currentUserId}
+        members={members}
+        refreshKey={ownershipKey}
+        onBecameOwner={load}
+      />
 
       <h3>{isOwner ? 'Delete community' : 'Leave community'}</h3>
       <DangerButton

@@ -15,6 +15,9 @@ defmodule Nosilence.Messaging.Message do
     field :device_id, :string
     # Order within the channel, assigned by the database (never by clock time).
     field :seq, :integer, read_after_writes: true
+    # Set when the author edits the text; the previous text is not kept.
+    field :edited_at, :utc_datetime_usec
+    field :edit_count, :integer, default: 0
     belongs_to :channel, Nosilence.Communities.Channel
     belongs_to :author, Nosilence.Accounts.User
     timestamps(type: :utc_datetime_usec, updated_at: false)

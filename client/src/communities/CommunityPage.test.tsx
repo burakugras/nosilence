@@ -28,6 +28,8 @@ vi.mock('../api/communities', () => ({
       ...extraMembers,
     ]),
   listInvites: () => Promise.resolve([]),
+  getTransfer: () => Promise.resolve({ transfer: null, handover_available_at: null }),
+  listOffers: () => Promise.resolve([]),
 }))
 
 const message = (id: string, text: string, authorId = 'u2'): Message => ({
@@ -40,10 +42,12 @@ const message = (id: string, text: string, authorId = 'u2'): Message => ({
 })
 
 const sent: string[] = []
+// Messages the fake server also returns after a reconnect.
+const stored: Message[] = []
 vi.mock('../api/messages', () => ({
   listMessages: () =>
     Promise.resolve({
-      messages: [message('m1', 'hello')],
+      messages: [message('m1', 'hello'), ...stored],
       has_more: false,
       read: { message_id: 'm1', seq: 2 },
     }),
@@ -53,6 +57,12 @@ vi.mock('../api/messages', () => ({
     return Promise.resolve({ ...message('m22', text, 'u1') })
   },
   deleteMessage: () => Promise.resolve(),
+  editMessage: (id: string, text: string) =>
+    Promise.resolve({
+      ...message(id, text, 'u1'),
+      edited_at: '2026-11-19T10:05:00.000000Z',
+      edits_left: 0,
+    }),
 }))
 
 /** A fake live connection the test drives by hand. */
@@ -80,6 +90,7 @@ describe('CommunityPage', () => {
     role = 'owner'
     sent.length = 0
     extraMembers.length = 0
+    stored.length = 0
   })
 
   it('owners see channel, invite and delete controls', async () => {
@@ -216,5 +227,41 @@ describe('CommunityPage', () => {
 
     act(() => state.listener!.removed())
     expect(screen.getByRole('heading', { name: 'Community not found' })).toBeInTheDocument()
+  })
+
+  it('edits the user’s own message and shows others’ edits live', async () => {
+    const { state } = renderPage()
+    expect(await screen.findByText('hello')).toBeInTheDocument()
+    // Only the author can edit.
+    expect(screen.queryByRole('button', { name: 'Edit message' })).toBeNull()
+
+    stored.push(message('m4444', 'mine', 'u1'))
+    act(() => state.listener!.event({ type: 'message_created', message: stored[0] }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit message' }))
+    const box = screen.getByRole('textbox', { name: 'Edit message' })
+    fireEvent.change(box, { target: { value: 'mine, fixed' } })
+    fireEvent.keyDown(box, { key: 'Enter' })
+    stored[0] = {
+      ...stored[0],
+      text: 'mine, fixed',
+      edited_at: '2026-11-19T10:05:00.000000Z',
+      edits_left: 0,
+    }
+    // A reconnect may re-render the list, so wait for the settled state.
+    await vi.waitFor(() => {
+      expect(screen.getByText('mine, fixed')).toBeInTheDocument()
+      expect(screen.getByText('(edited)')).toBeInTheDocument()
+    })
+
+    act(() =>
+      state.listener!.event({
+        type: 'message_updated',
+        message: { ...message('m1', 'hello again'), edited_at: '2026-11-19T10:06:00.000000Z' },
+      }),
+    )
+    expect(screen.getByText('hello again')).toBeInTheDocument()
+    expect(screen.getAllByText('(edited)')).toHaveLength(2)
+    // Three edits used: no more Edit button.
+    expect(screen.queryByRole('button', { name: 'Edit message' })).toBeNull()
   })
 })

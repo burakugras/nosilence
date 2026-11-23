@@ -61,7 +61,7 @@ defmodule Nosilence.Communities do
         Repo.all(
           from ch in Channel,
             where: ch.community_id == ^community.id,
-            order_by: [ch.inserted_at, ch.name]
+            order_by: [ch.position, ch.inserted_at, ch.name]
         )
 
       {:ok, %{community: community, channels: channels, membership: membership}}
@@ -90,7 +90,7 @@ defmodule Nosilence.Communities do
          from m in Membership,
            join: u in assoc(m, :user),
            where: m.community_id == ^community_id,
-           order_by: [desc: m.role == "owner", asc: u.display_name],
+           order_by: [desc: m.role == "owner", desc: m.role == "moderator", asc: u.display_name],
            select: %{user_id: u.id, display_name: u.display_name, role: m.role}
        )}
     end
@@ -101,30 +101,47 @@ defmodule Nosilence.Communities do
   `member_removed` event; the voice room ids are returned so callers can also
   remove them from voice.
   """
-  def remove_member(%User{} = owner, community_id, member_user_id) do
-    with {:ok, membership} <- authorize(owner, community_id, :remove_member),
-         {:ok, member_user_id} <- Ecto.UUID.cast(member_user_id) do
-      community_id = membership.community_id
+  def remove_member(%User{} = actor, community_id, member_user_id) do
+    with {:ok, target} <- act_on(actor, community_id, member_user_id, :remove_member) do
+      Repo.delete!(target)
+      Events.broadcast(target.community_id, "member_removed", %{user_id: target.user_id})
+      {:ok, %{voice_rooms: voice_rooms(target.community_id)}}
+    end
+  end
 
-      {count, _} =
-        Repo.delete_all(
-          from m in Membership,
-            where:
-              m.community_id == ^community_id and m.user_id == ^member_user_id and
-                m.role != "owner"
-        )
-
-      if count == 1 do
-        Events.broadcast(community_id, "member_removed", %{user_id: member_user_id})
-        {:ok, %{voice_rooms: voice_rooms(community_id)}}
-      else
-        {:error, :not_found}
-      end
+  @doc """
+  The target's membership if `actor` may perform `action` on them: the action
+  is allowed for the actor's role and the actor ranks above the target.
+  """
+  def act_on(%User{} = actor, community_id, target_user_id, action) do
+    with {:ok, membership} <- authorize(actor, community_id, action),
+         {:ok, target_id} <- Ecto.UUID.cast(target_user_id),
+         %Membership{} = target <-
+           Repo.get_by(Membership, community_id: membership.community_id, user_id: target_id) do
+      if Policy.outranks?(membership, target.role), do: {:ok, target}, else: {:error, :forbidden}
     else
       :error -> {:error, :not_found}
+      nil -> {:error, :not_found}
       error -> error
     end
   end
+
+  @doc "Makes a member a moderator or a moderator a member. Owner only."
+  def set_role(%User{} = owner, community_id, user_id, role)
+      when role in ["moderator", "member"] do
+    with {:ok, target} <- act_on(owner, community_id, user_id, :manage_roles) do
+      target |> Ecto.Changeset.change(role: role) |> Repo.update!()
+
+      Events.broadcast(target.community_id, "member_updated", %{
+        user_id: target.user_id,
+        role: role
+      })
+
+      :ok
+    end
+  end
+
+  def set_role(_owner, _community_id, _user_id, _role), do: {:error, {:invalid, "role"}}
 
   @doc "Leaves a community. The owner cannot leave; they delete the community instead."
   def leave_community(%User{} = user, community_id) do
@@ -138,8 +155,15 @@ defmodule Nosilence.Communities do
   ## Channels
 
   def create_channel(%User{} = user, community_id, attrs) do
-    with {:ok, _} <- authorize(user, community_id, :create_channel) do
-      %Channel{community_id: community_id}
+    with {:ok, membership} <- authorize(user, community_id, :create_channel) do
+      last =
+        Repo.one(
+          from ch in Channel,
+            where: ch.community_id == ^membership.community_id,
+            select: max(ch.position)
+        ) || 0
+
+      %Channel{community_id: membership.community_id, position: last + 1}
       |> Channel.changeset(Map.take(attrs, ["name", "kind", "capacity"]))
       |> Repo.insert()
       |> tap(fn
@@ -156,6 +180,54 @@ defmodule Nosilence.Communities do
       end)
     end
   end
+
+  @doc "Renames a channel. Owner only."
+  def rename_channel(%User{} = user, channel_id, name) do
+    with {:ok, channel, _} <- authorize_channel(user, channel_id, :manage_channels) do
+      channel
+      |> Ecto.Changeset.cast(%{"name" => name}, [:name])
+      |> Nosilence.Communities.Names.validate(:name, max: 32)
+      |> Repo.update()
+      |> tap(fn
+        {:ok, ch} -> Events.broadcast(ch.community_id, "channels_changed", %{})
+        _ -> :ok
+      end)
+    end
+  end
+
+  @doc "Deletes a channel and everything in it. Owner only. Returns the channel."
+  def delete_channel(%User{} = user, channel_id) do
+    with {:ok, channel, _} <- authorize_channel(user, channel_id, :manage_channels) do
+      Repo.delete!(channel)
+      Events.broadcast(channel.community_id, "channels_changed", %{})
+      {:ok, channel}
+    end
+  end
+
+  @doc "Puts the community's channels in the given order (a list of all their ids). Owner only."
+  def reorder_channels(%User{} = user, community_id, ids) when is_list(ids) do
+    with {:ok, membership} <- authorize(user, community_id, :manage_channels) do
+      cid = membership.community_id
+      current = Repo.all(from ch in Channel, where: ch.community_id == ^cid, select: ch.id)
+
+      if Enum.sort(current) == Enum.sort(ids) do
+        Repo.transaction(fn ->
+          ids
+          |> Enum.with_index(1)
+          |> Enum.each(fn {id, pos} ->
+            Repo.update_all(from(ch in Channel, where: ch.id == ^id), set: [position: pos])
+          end)
+        end)
+
+        Events.broadcast(cid, "channels_changed", %{})
+        :ok
+      else
+        {:error, {:invalid, "ids"}}
+      end
+    end
+  end
+
+  def reorder_channels(_user, _community_id, _ids), do: {:error, {:invalid, "ids"}}
 
   @doc "The community a channel belongs to (for server-side events, no user check)."
   def community_of_channel(channel_id) do
@@ -175,6 +247,9 @@ defmodule Nosilence.Communities do
       _ -> {:error, :not_found}
     end
   end
+
+  @doc "Ids of the community's voice channels (their LiveKit rooms)."
+  def voice_room_ids(community_id), do: voice_rooms(community_id)
 
   defp voice_rooms(community_id) do
     Repo.all(

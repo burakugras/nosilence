@@ -64,6 +64,17 @@ defmodule NosilenceWeb.Router do
     delete "/communities/:id", CommunityController, :delete
     get "/communities/:id/members", CommunityController, :members
     delete "/communities/:id/members/:user_id", CommunityController, :remove_member
+    patch "/communities/:id/members/:user_id", CommunityController, :set_role
+    delete "/communities/:id/voice/:user_id", CommunityController, :disconnect_voice
+    post "/communities/:id/channels/order", CommunityController, :reorder_channels
+    get "/communities/:id/ownership", OwnershipController, :show
+    post "/communities/:id/ownership", OwnershipController, :offer
+    delete "/communities/:id/ownership", OwnershipController, :cancel
+    get "/ownership-offers", OwnershipController, :offers
+    post "/ownership-offers/:transfer_id/accept", OwnershipController, :accept
+    post "/ownership-offers/:transfer_id/decline", OwnershipController, :decline
+    patch "/channels/:channel_id", CommunityController, :rename_channel
+    delete "/channels/:channel_id", CommunityController, :delete_channel
     delete "/communities/:id/membership", CommunityController, :leave
     post "/communities/:id/channels", CommunityController, :create_channel
 
@@ -78,6 +89,7 @@ defmodule NosilenceWeb.Router do
     get "/channels/:channel_id/messages", MessageController, :index
     post "/channels/:channel_id/messages", MessageController, :create
     post "/channels/:channel_id/read", MessageController, :read
+    patch "/messages/:id", MessageController, :update
     delete "/messages/:id", MessageController, :delete
 
     post "/socket-token", SocketController, :create

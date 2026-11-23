@@ -94,3 +94,5 @@ config :nosilence, Nosilence.Retention, enabled: false
 
 # Check LiveKit participants against MLS sessions quickly in tests.
 config :nosilence, Nosilence.Voice.Watchdog, grace_ms: 50
+
+config :nosilence, Nosilence.Communities.SuccessionWorker, enabled: false

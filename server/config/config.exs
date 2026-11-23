@@ -58,6 +58,13 @@ config :nosilence, Nosilence.Retention,
   # Invites that expired, were revoked or used up are kept this long, then deleted.
   stale_invite_days: 30
 
+# Handing communities over (ADR 0012): each candidate has this long to answer;
+# if the owner's account is gone and nobody accepts, members get this much notice.
+config :nosilence, Nosilence.Communities.Succession,
+  response_hours: 72,
+  final_notice_days: 7,
+  cooldown_days: 7
+
 # Rate limits per key (ADR 0009): `limit` hits in any `window` ms. Going over a
 # limit with a `penalty` blocks for that long, longer if it repeats soon.
 config :nosilence, Nosilence.RateLimit,

@@ -35,6 +35,21 @@ defmodule Nosilence.Accounts.UserNotifier do
     """)
   end
 
+  def deliver_ownership_offer(user, community, deadline) do
+    url = Application.fetch_env!(:nosilence, :app_url) <> "/c/" <> community.id
+
+    deliver(user.email, "You are offered ownership of #{community.name}", """
+    Hi #{user.display_name},
+
+    You have been offered ownership of the community "#{community.name}" on Nosilence.
+    Accept or decline it in the app before #{Calendar.strftime(deadline, "%Y-%m-%d %H:%M")} UTC:
+
+    #{url}
+
+    If you do not answer by then, the next person on the list is asked.
+    """)
+  end
+
   defp deliver(to, subject, body) do
     email =
       new()
