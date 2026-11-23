@@ -106,7 +106,6 @@ Postponed on purpose. Reviewed at the start of every phase.
 | --- | --- | --- |
 | Persistent device keys and verifying people across calls | Phase 5 | After the MVP |
 | Hiding who speaks when from the media server (audio level header, packet timing) | Phase 5 | After the MVP |
-| Global push-to-talk: registered shortcut (takes the key from other apps) or a listening keyboard hook (also mouse buttons; antivirus may flag it) | Phase 6 | Phase 9 |
 | Code signing for the Windows installer (SmartScreen warning until then) | Phase 6 | Phase 12 |
 | Production server address in `client/.env.desktop` and the desktop CSP | Phase 6 | Phase 12 |
 | Automatic updates for the desktop app: Tauri updater with a signed update (key kept by Burak, copy in GitHub Secrets), releases on GitHub, check on start and a "Check for updates" button | Phase 6 | Phase 10 |
@@ -121,7 +120,7 @@ Postponed on purpose. Reviewed at the start of every phase.
 | Behind a reverse proxy, rate limits and traffic records need the real client address (trusted `X-Forwarded-For`) | Phase 7a | Phase 12 |
 | Restricted access to traffic records, with every access logged; a way to answer lawful requests | Phase 7a | Phase 12 |
 | Re-check ignored Rust advisories (`.cargo/audit.toml`) when openmls or Tauri are updated | Phase 7a | Every dependency update |
-| Loss protection that works with E2EE: LiveKit disables RED when E2EE is on; our own redundancy inside the encrypted frame | Phase 7b | Phase 9 |
-| Investigate why half of LiveKit full reconnects take about 2 s instead of 0.3 s | Phase 7b | Phase 9 |
 | Run tools/netlab on a schedule (nightly) on a dedicated machine | Phase 7b | After the MVP |
 | Production webhook URL in the LiveKit configuration | Phase 7b | Phase 12 |
+| Offer the LiveKit fixes upstream (audio loss proxying in the server, the 2 s wait in livekit-client); then drop `infra/livekit/` and `client/patches/` | Phase 9 | When LiveKit releases them (production needs the image or a fixed release by Phase 12) |
+| Global push-to-talk through a keyboard hook (keys pass through, more buttons) once the installer is signed | Phase 9 | After Phase 12 |

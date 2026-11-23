@@ -1,0 +1,12 @@
+--- a/pkg/sfu/receiver_base.go
++++ b/pkg/sfu/receiver_base.go
+@@ -695,6 +695,9 @@
+ func (r *ReceiverBase) setupBuffer(buff buffer.BufferProvider, layer int32, rtt uint32, paused bool) {
+ 	buff.SetLogger(r.params.Logger.WithValues("layer", layer))
+ 	buff.SetAudioLevelConfig(r.audioConfig.AudioLevelConfig)
++	if lp, ok := buff.(interface{ SetAudioLossProxying(enable bool) }); ok {
++		lp.SetAudioLossProxying(r.audioConfig.EnableLossProxying)
++	}
+ 	buff.SetStreamRestartDetection(r.enableRTPStreamRestartDetection)
+ 	buff.OnRtcpSenderReport(func() {
+ 		srData := buff.GetSenderReportData()

@@ -42,6 +42,9 @@ Copy-Item .env.example .env   # then replace every change-me value
 docker compose up -d
 ```
 
+The first `docker compose up` builds our LiveKit image (`infra/livekit/`: LiveKit
+with one fix, ADR 0013), which downloads LiveKit's source from GitHub.
+
 If the services stop answering after the computer sleeps or Docker Desktop restarts
 (containers show "Up" but requests from Windows time out), Docker's port forwarding
 has dropped. Restart the containers:

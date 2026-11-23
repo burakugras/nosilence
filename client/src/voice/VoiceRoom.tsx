@@ -3,12 +3,16 @@ import {
   LiveKitRoom,
   RoomAudioRenderer,
   TrackToggle,
+  useRoomContext,
+  useConnectionState,
   useIsSpeaking,
   useLocalParticipant,
   useParticipants,
   useRemoteParticipants,
 } from '@livekit/components-react'
 import {
+  ConnectionState,
+  createLocalAudioTrack,
   isE2EESupported,
   LocalAudioTrack,
   RemoteAudioTrack,
@@ -27,7 +31,10 @@ import { openVoiceTopic } from '../gateway/phoenixGateway'
 import { beforeQuit } from '../platform'
 import type { OpenVoiceTopic } from '../gateway/types'
 import { CallQuality, sendCallReport } from './callReport'
+import { watchPushToTalk } from './pushToTalk'
+import { CAPTURE, formatKeys, getVoiceSettings, useVoiceSettings } from './settings'
 import { summariseInbound, type InboundAudioSample, type InboundAudioSummary } from './stats'
+import { VoiceSettingsPanel } from './VoiceSettingsPanel'
 
 type Props = {
   join: VoiceJoin
@@ -47,7 +54,9 @@ type Status = E2eeStatus | { state: 'ended'; reason: 'unsupported' }
 /** A LiveKit room whose media keys come only from our MLS group (ADR 0007). */
 function createRoom() {
   const keyProvider = new MlsKeyProvider()
+  const { speakerId } = getVoiceSettings()
   const room = new Room({
+    audioOutput: speakerId ? { deviceId: speakerId } : undefined,
     e2ee: {
       keyProvider,
       worker: new Worker(new URL('livekit-client/e2ee-worker', import.meta.url), {
@@ -136,7 +145,8 @@ export function VoiceRoom({
       serverUrl={join.url}
       token={join.token}
       connect={keyed && !ended}
-      audio={{ echoCancellation: true, noiseSuppression: true, autoGainControl: true }}
+      // The microphone is published by <Microphone>, muted first in push-to-talk.
+      audio={false}
       video={false}
       onConnected={() => {
         quality.joined(joinStartedAt)
@@ -148,12 +158,14 @@ export function VoiceRoom({
       <h2>{title}</h2>
       <EncryptionPanel status={status} />
       {!ended && <ParticipantList />}
-      <div className="controls">
-        {!ended && <TrackToggle source={Track.Source.Microphone}>Microphone</TrackToggle>}
-        <button type="button" onClick={onLeave}>
-          Leave
-        </button>
-      </div>
+      {!ended && <Microphone onLeave={onLeave} />}
+      {ended && (
+        <div className="controls">
+          <button type="button" onClick={onLeave}>
+            Leave
+          </button>
+        </div>
+      )}
       {!ended && (
         <>
           <ConnectionStats />
@@ -163,6 +175,98 @@ export function VoiceRoom({
         </>
       )}
     </LiveKitRoom>
+  )
+}
+
+/**
+ * Publishes the microphone with the chosen device, talks only while the
+ * push-to-talk keys are held (muted from the start), follows device changes
+ * during the call, and shows the call's controls and voice settings.
+ */
+function Microphone({ onLeave }: { onLeave: () => void }) {
+  const room = useRoomContext()
+  const connection = useConnectionState()
+  const settings = useVoiceSettings()
+  const [track, setTrack] = useState<LocalAudioTrack>()
+  const [failed, setFailed] = useState(false)
+  const [talking, setTalking] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const publishing = useRef(false)
+
+  // Once connected: open the microphone and publish it (once per call).
+  useEffect(() => {
+    if (connection !== ConnectionState.Connected || publishing.current) return
+    publishing.current = true
+    void (async () => {
+      const { microphoneId, mode } = getVoiceSettings()
+      const mic = await createLocalAudioTrack({
+        ...CAPTURE,
+        deviceId: microphoneId || undefined,
+      })
+      // Push-to-talk: nothing is sent before the keys are held.
+      if (mode === 'push') await mic.mute()
+      await room.localParticipant.publishTrack(mic, { source: Track.Source.Microphone })
+      setTrack(mic)
+    })().catch(() => setFailed(true))
+  }, [connection, room])
+
+  // Devices chosen during the call (the call started with the saved ones).
+  const devices = useRef(getVoiceSettings())
+  useEffect(() => {
+    if (!track || settings.microphoneId === devices.current.microphoneId) return
+    devices.current = { ...devices.current, microphoneId: settings.microphoneId }
+    void room.switchActiveDevice('audioinput', settings.microphoneId || 'default').catch(() => {})
+  }, [room, track, settings.microphoneId])
+  useEffect(() => {
+    if (settings.speakerId === devices.current.speakerId) return
+    devices.current = { ...devices.current, speakerId: settings.speakerId }
+    void room.switchActiveDevice('audiooutput', settings.speakerId || 'default').catch(() => {})
+  }, [room, settings.speakerId])
+
+  // Voice activity: always open (the user can still mute). Push-to-talk:
+  // open only while the keys are held.
+  const pushKeys = settings.mode === 'push' ? settings.pushKeys.join('+') : ''
+  useEffect(() => {
+    if (!track) return
+    if (!pushKeys) {
+      void track.unmute()
+      return
+    }
+    void track.mute()
+    return watchPushToTalk(pushKeys.split('+'), (down) => {
+      setTalking(down)
+      void (down ? track.unmute() : track.mute())
+    })
+  }, [track, pushKeys])
+
+  return (
+    <>
+      <div className="controls">
+        {settings.mode === 'push' ? (
+          <p className={talking ? 'ptt talking' : 'ptt'} role="status">
+            {talking ? 'Talking' : `Hold ${formatKeys(settings.pushKeys)} to talk`}
+          </p>
+        ) : (
+          <TrackToggle source={Track.Source.Microphone}>Microphone</TrackToggle>
+        )}
+        <button
+          type="button"
+          aria-expanded={showSettings}
+          onClick={() => setShowSettings((v) => !v)}
+        >
+          Voice settings
+        </button>
+        <button type="button" onClick={onLeave}>
+          Leave
+        </button>
+      </div>
+      {failed && (
+        <p className="form-message" role="alert">
+          The microphone could not be opened. Check that the browser may use it, then join again.
+        </p>
+      )}
+      {showSettings && <VoiceSettingsPanel liveTrack={track?.mediaStreamTrack} />}
+    </>
   )
 }
 

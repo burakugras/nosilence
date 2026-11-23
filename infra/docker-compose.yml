@@ -22,7 +22,9 @@ services:
       retries: 10
 
   livekit:
-    image: livekit/livekit-server:v1.13.11
+    # LiveKit 1.13.11 with the loss proxying fix (livekit/Dockerfile, ADR 0013).
+    build: ./livekit
+    image: nosilence/livekit-server:v1.13.11-lossproxy
     restart: unless-stopped
     command: ["--config", "/etc/livekit.yaml"]
     extra_hosts:
@@ -58,6 +60,12 @@ configs:
         # Default room capacity; the backend enforces the same configurable limit.
         max_participants: 8
         empty_timeout: 300
+      # Reports the weakest listener's packet loss to the speaker, so the
+      # speaker's Opus encoder adds in-band FEC (ADR 0013). Without it a loss
+      # on the listener's side is never seen by the sender, and with E2EE RED is
+      # off, so lost audio is only guessed.
+      audio:
+        enable_loss_proxying: true
       # Tells the backend who joins and leaves rooms (ADR 0011): presence
       # correction, and removal of anyone not in the room's MLS group.
       webhook:

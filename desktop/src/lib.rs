@@ -7,6 +7,8 @@
 // * sign in with Google through the system browser (RFC 8252 loopback + PKCE),
 // * live in the system tray, so closing the window does not end a call.
 
+mod ptt;
+
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde::Serialize;
@@ -220,7 +222,8 @@ pub fn run() {
             clear_token,
             google_sign_in,
             request_quit,
-            quit_now
+            quit_now,
+            ptt::set_push_to_talk
         ])
         .setup(|app| {
             let show = MenuItem::with_id(app, "show", "Show Nosilence", true, None::<&str>)?;

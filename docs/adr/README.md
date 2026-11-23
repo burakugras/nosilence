@@ -35,3 +35,4 @@ What becomes easier, what becomes harder, what we must do next.
 | [0010](0010-read-positions.md) | Read positions and unread messages |
 | [0011](0011-network-measurement-and-webhooks.md) | Network measurement, LiveKit webhooks and anonymous metrics |
 | [0012](0012-community-management.md) | Roles, channel management, message editing and handing over ownership |
+| [0013](0013-voice-quality-and-control.md) | Loss protection, faster reconnects, devices and push-to-talk |

@@ -25,11 +25,21 @@ in `client/`). Then:
 cd tools/netlab
 npm install
 npm run measure              # the four targets, about 3 minutes
-node netlab.mjs --listen     # recordings/clean.wav, loss-10.wav, loss-20.wav
+node netlab.mjs --listen     # recordings/*.wav, with loss and concealed audio per scenario
+node netlab.mjs --ptt        # push-to-talk: silent until Ctrl + Shift is held
+node netlab.mjs --rejoin     # leave and join again 3 times (--rejoin-who first: the group's founder)
+node netlab.mjs --settings-shot  # recordings/settings.png, the voice settings page
 ```
 
 Options: `--app http://127.0.0.1:5173`, `--api http://127.0.0.1:4000`,
-`--chrome "<path to chrome.exe>"`, `--livekit-container nosilence-livekit-1`, `--headful`.
+`--chrome "<path to chrome.exe>"`, `--livekit-container nosilence-livekit-1`, `--headful`,
+`--only "clean,10% loss"` (scenarios by label), `--trace` (room events during reconnects).
+
+Scenarios degrade the server-to-listener direction with netem, except
+`10% uplink loss` / `uplink-loss-10`, which drops packets the clients send to the
+server (iptables), as a poor sender connection would. Opus FEC protects speech, not
+ticks: judge loss protection by the listening test's "concealed" share (ADR 0013).
+A reconnect run only counts when LiveKit really reconnected.
 
 The listening test speaks Harvard sentences (IEEE 1969) with Windows text-to-speech
 and records what the receiver hears. Recordings stay local (`recordings/` is ignored

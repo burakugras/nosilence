@@ -1,0 +1,30 @@
+diff --git a/node_modules/livekit-client/dist/livekit-client.esm.mjs b/node_modules/livekit-client/dist/livekit-client.esm.mjs
+index 0cf42f2..712877a 100644
+--- a/node_modules/livekit-client/dist/livekit-client.esm.mjs
++++ b/node_modules/livekit-client/dist/livekit-client.esm.mjs
+@@ -22598,7 +22598,9 @@ class RTCEngine extends eventsExports.EventEmitter {
+         }
+         this.client.setReconnected();
+         this.emit(EngineEvent.SignalRestarted, joinResponse, restartAttempt.signal);
+-        yield this.waitForPCReconnected();
++        // Nosilence patch: the peer connections are new, so there is no stale
++        // "connected" state to wait out; skip the fixed 2 s wait.
++        yield this.waitForPCReconnected(false);
+         if (abortSignal.aborted) {
+           this.log.info('full reconnect cancelled after peer connections reconnected', {
+             regionUrl
+@@ -22748,12 +22750,12 @@ class RTCEngine extends eventsExports.EventEmitter {
+       }
+     });
+   }
+-  waitForPCReconnected() {
++  waitForPCReconnected(waitFirst = true) {
+     return __awaiter(this, void 0, void 0, function* () {
+       this.pcState = PCState.Reconnecting;
+       this.log.debug('waiting for peer connection to reconnect');
+       try {
+-        yield sleep(minReconnectWait); // FIXME setTimeout again not ideal for a connection critical path
++        if (waitFirst) yield sleep(minReconnectWait); // FIXME setTimeout again not ideal for a connection critical path
+         if (!this.pcManager) {
+           throw new UnexpectedConnectionState('PC manager is closed');
+         }

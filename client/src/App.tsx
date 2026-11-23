@@ -12,6 +12,7 @@ import { CommunitiesPage } from './communities/CommunitiesPage'
 import { CommunityPage } from './communities/CommunityPage'
 import { InvitePage } from './communities/InvitePage'
 import { navigate, useLocation } from './router'
+import { SettingsPage } from './voice/SettingsPage'
 
 type Props = {
   loadUser?: () => Promise<User | null>
@@ -83,6 +84,8 @@ export default function App({ loadUser = currentUser }: Props) {
           navigate('/login', { replace: true })
         }}
       />
+    ) : path === '/settings' ? (
+      <SettingsPage />
     ) : path === '/invite' ? (
       <InvitePage token={params.get('token')} />
     ) : community ? (
@@ -120,7 +123,7 @@ function Shell({
         <h1>Nosilence</h1>
         {user && (
           <p>
-            <Link to="/account">{user.display_name}</Link>{' '}
+            <Link to="/settings">Settings</Link> <Link to="/account">{user.display_name}</Link>{' '}
             <button type="button" className="link-button" onClick={onSignOut}>
               Sign out
             </button>
