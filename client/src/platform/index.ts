@@ -58,12 +58,50 @@ export function beforeQuit(handler: () => Promise<unknown>): () => void {
   quitHandlers.add(handler)
   quitListener ??= import('@tauri-apps/api/event').then(({ listen }) =>
     listen('quit-requested', async () => {
-      await Promise.allSettled([...quitHandlers].map((h) => h()))
+      await runQuitHandlers()
       await invoke('quit_now')
     }),
   )
   return () => {
     quitHandlers.delete(handler)
+  }
+}
+
+const runQuitHandlers = () => Promise.allSettled([...quitHandlers].map((h) => h()))
+
+/** The desktop app's version (null on the web). */
+export async function appVersion(): Promise<string | null> {
+  if (!isDesktop) return null
+  const { getVersion } = await import('@tauri-apps/api/app')
+  return getVersion()
+}
+
+export type DownloadedUpdate = {
+  version: string
+  /** Leaves any call cleanly, installs the update and starts the new version. */
+  install: () => Promise<void>
+}
+
+/**
+ * Desktop app: looks for a newer version on GitHub Releases and downloads it
+ * (ADR 0014). The updater only accepts a package signed with our key, so a
+ * tampered download is refused. Null when there is none (or on the web).
+ */
+export async function downloadUpdate(): Promise<DownloadedUpdate | null> {
+  if (!isDesktop) return null
+  const { check } = await import('@tauri-apps/plugin-updater')
+  const update = await check()
+  if (!update) return null
+  await update.download()
+  return {
+    version: update.version,
+    install: async () => {
+      await runQuitHandlers()
+      // On Windows the installer takes over here and starts the new version.
+      await update.install()
+      const { relaunch } = await import('@tauri-apps/plugin-process')
+      await relaunch()
+    },
   }
 }
 
@@ -75,6 +113,10 @@ export type DesktopGoogleResult = { code: string; verifier: string } | { error: 
  */
 export const desktopGoogleSignIn = () =>
   invoke<DesktopGoogleResult>('google_sign_in', { apiOrigin })
+
+/** Stops waiting for the browser (the user closed it); the sign-in ends as "cancelled". */
+export const cancelDesktopGoogleSignIn = () =>
+  invoke('cancel_google_sign_in').catch(() => undefined)
 
 /**
  * Desktop push-to-talk: the app polls only these keys (Windows key state, no
@@ -104,4 +146,16 @@ export function desktopPushToTalk(keys: string[], onChange: (down: boolean) => v
     void invoke('set_push_to_talk', { keys: [] }).catch(() => undefined)
     if (down) onChange(false)
   }
+}
+
+/**
+ * Desktop app: a Windows notification. Asks for permission the first time;
+ * does nothing if it is refused, and on the web.
+ */
+export async function showNotification(title: string, body: string) {
+  if (!isDesktop) return
+  const { isPermissionGranted, requestPermission, sendNotification } =
+    await import('@tauri-apps/plugin-notification')
+  const allowed = (await isPermissionGranted()) || (await requestPermission()) === 'granted'
+  if (allowed) sendNotification({ title, body })
 }

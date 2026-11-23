@@ -7,6 +7,18 @@ defmodule Nosilence.Events do
 
   def community_topic(community_id), do: "community:" <> community_id
 
+  def user_topic(user_id), do: "user:" <> user_id
+
+  @doc "The user joined a community: their own topic starts following it."
+  def memberships_changed(user_id),
+    do:
+      Phoenix.Channel.Server.broadcast(
+        Nosilence.PubSub,
+        user_topic(user_id),
+        "memberships_changed",
+        %{}
+      )
+
   def broadcast(community_id, event, payload) do
     Phoenix.Channel.Server.broadcast(
       Nosilence.PubSub,

@@ -16,11 +16,21 @@ function subscribe(listener: () => void) {
 
 const snapshot = () => window.location.pathname + window.location.search
 
+// How many of our own pages lie behind this one (kept in the history entry, so
+// it is right again after going back or forward).
+const depth = (): number => (window.history.state as { depth?: number } | null)?.depth ?? 0
+
 export function navigate(to: string, { replace = false } = {}) {
-  if (replace) window.history.replaceState(null, '', to)
-  else window.history.pushState(null, '', to)
+  if (replace) window.history.replaceState({ depth: depth() }, '', to)
+  else window.history.pushState({ depth: depth() + 1 }, '', to)
   listeners.forEach((l) => l())
 }
+
+/** Back to the previous page of the app (the desktop app has no back button of its own). */
+export const goBack = () => window.history.back()
+
+/** Whether there is a page of the app to go back to. */
+export const useCanGoBack = () => useSyncExternalStore(subscribe, () => depth() > 0)
 
 /** Current path and query parameters; re-renders on navigation. */
 export function useLocation() {

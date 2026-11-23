@@ -136,6 +136,12 @@ defmodule Nosilence.Accounts do
 
   def redeem_desktop_handoff(_, _), do: :error
 
+  @doc "Whether `verifier` is the PKCE verifier of `challenge` (S256, RFC 7636)."
+  def pkce_matches?(challenge, verifier) when is_binary(challenge) and is_binary(verifier),
+    do: Plug.Crypto.secure_compare(challenge, pkce_challenge(verifier))
+
+  def pkce_matches?(_, _), do: false
+
   defp pkce_challenge(verifier),
     do: :crypto.hash(:sha256, verifier) |> Base.url_encode64(padding: false)
 

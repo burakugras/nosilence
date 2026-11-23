@@ -108,8 +108,6 @@ Postponed on purpose. Reviewed at the start of every phase.
 | Hiding who speaks when from the media server (audio level header, packet timing) | Phase 5 | After the MVP |
 | Code signing for the Windows installer (SmartScreen warning until then) | Phase 6 | Phase 12 |
 | Production server address in `client/.env.desktop` and the desktop CSP | Phase 6 | Phase 12 |
-| Automatic updates for the desktop app: Tauri updater with a signed update (key kept by Burak, copy in GitHub Secrets), releases on GitHub, check on start and a "Check for updates" button | Phase 6 | Phase 10 |
-| Finishing a first Google sign-up inside the desktop app (done in the browser for now) | Phase 6 | Phase 10 |
 | macOS app: check WebKit (WKWebView) with microphone and E2EE first | Phase 6 | After the MVP |
 | Disk encryption for the database and backups | Phase 4 | Phase 12 |
 | Legal review of retention periods (traffic logs 1 year, metadata 30 days) | Phase 0 | Phase 12 |
@@ -124,3 +122,6 @@ Postponed on purpose. Reviewed at the start of every phase.
 | Production webhook URL in the LiveKit configuration | Phase 7b | Phase 12 |
 | Offer the LiveKit fixes upstream (audio loss proxying in the server, the 2 s wait in livekit-client); then drop `infra/livekit/` and `client/patches/` | Phase 9 | When LiveKit releases them (production needs the image or a fixed release by Phase 12) |
 | Global push-to-talk through a keyboard hook (keys pass through, more buttons) once the installer is signed | Phase 9 | After Phase 12 |
+| Notifications in the web app (browser notifications), and clicking a notification to open the channel | Phase 10 | Phase 11 |
+| Muting single communities or channels for notifications | Phase 10 | Phase 11 |
+| Opening invite links straight in the desktop app (a `nosilence://` link handler); for now the link is pasted on the communities page | Phase 10 | Phase 11 |

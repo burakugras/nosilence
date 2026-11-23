@@ -12,6 +12,7 @@ import { Field, FormMessage } from '../components/Field'
 import { Link } from '../components/Link'
 import { navigate } from '../router'
 import { collect, nameError } from '../validation'
+import { inviteToken } from './inviteLink'
 
 export function CommunitiesPage() {
   const [communities, setCommunities] = useState<CommunitySummary[]>()
@@ -19,6 +20,8 @@ export function CommunitiesPage() {
   const [offers, setOffers] = useState<OwnershipOffer[]>([])
   const [name, setName] = useState('')
   const { busy, errors, message, run } = useSubmit()
+  const [invite, setInvite] = useState('')
+  const [inviteError, setInviteError] = useState<string>()
 
   useEffect(() => {
     listCommunities()
@@ -28,6 +31,13 @@ export function CommunitiesPage() {
       .then(setOffers)
       .catch(() => setOffers([]))
   }, [])
+
+  function openInvite(event: FormEvent) {
+    event.preventDefault()
+    const token = inviteToken(invite)
+    if (!token) return setInviteError('Paste the whole invite link you were sent.')
+    navigate(`/invite?token=${encodeURIComponent(token)}`)
+  }
 
   function create(event: FormEvent) {
     event.preventDefault()
@@ -61,6 +71,25 @@ export function CommunitiesPage() {
           ))}
         </ul>
       )}
+
+      <h3>Join with an invite</h3>
+      <form
+        className="stack-form"
+        onSubmit={openInvite}
+        noValidate
+        aria-label="Join with an invite"
+      >
+        <Field
+          label="Invite link"
+          value={invite}
+          onChange={(e) => {
+            setInvite(e.target.value)
+            setInviteError(undefined)
+          }}
+          error={inviteError}
+        />
+        <button type="submit">Open invite</button>
+      </form>
 
       <h3>Create a community</h3>
       <form className="stack-form" onSubmit={create} noValidate>

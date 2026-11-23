@@ -36,8 +36,12 @@ defmodule Nosilence.Communities do
     end)
     |> Repo.transaction()
     |> case do
-      {:ok, %{community: community}} -> {:ok, community}
-      {:error, :community, changeset, _} -> {:error, changeset}
+      {:ok, %{community: community}} ->
+        Events.memberships_changed(user.id)
+        {:ok, community}
+
+      {:error, :community, changeset, _} ->
+        {:error, changeset}
     end
   end
 
@@ -353,6 +357,8 @@ defmodule Nosilence.Communities do
           user_id: user.id,
           display_name: user.display_name
         })
+
+        Events.memberships_changed(user.id)
 
         {:ok, Repo.get!(Community, invite.community_id)}
 

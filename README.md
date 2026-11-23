@@ -82,6 +82,30 @@ SmartScreen warns once). It is written to `desktop/target/release/bundle/nsis/`:
 npm run build
 ```
 
+### Desktop releases and updates
+
+Installed apps update themselves from GitHub Releases (ADR 0014). Updates are signed
+with a key only the maintainer holds; the app contains the public key and refuses
+anything else.
+
+One-time setup (keep the private key and its password safe, outside the repository;
+losing it means installed apps can no longer be updated):
+
+```powershell
+cd desktop
+New-Item -ItemType Directory -Force $HOME\.tauri
+npx.cmd tauri signer generate -w $HOME\.tauri\nosilence-update.key
+```
+
+Put the contents of `nosilence-update.key.pub` into `plugins.updater.pubkey` in
+`desktop/tauri.conf.json`, and add two repository secrets on GitHub:
+`TAURI_SIGNING_PRIVATE_KEY` (the contents of the private key file) and
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+
+To release: raise `version` in `desktop/tauri.conf.json`, merge, then push a tag
+`desktop-v<version>`. The `Desktop release` workflow builds the installer and the
+signed update and publishes them with `latest.json`.
+
 ### Testing voice on one computer
 
 Open the two participants in **different browsers** (for example Chrome and Edge)

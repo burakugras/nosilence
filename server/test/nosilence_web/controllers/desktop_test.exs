@@ -146,15 +146,96 @@ defmodule NosilenceWeb.DesktopTest do
       assert Accounts.get_user_by_session(token).id == user.id
     end
 
-    test "a first-time Google user finishes signing up in the browser" do
+    test "a first-time Google user signs up inside the app" do
       {conn, query} = begin(desktop_params())
-      respond_with(%{"nonce" => query["nonce"], "email" => "new@example.com", "sub" => "new"})
+
+      respond_with(%{
+        "nonce" => query["nonce"],
+        "email" => "new@example.com",
+        "sub" => "new",
+        "name" => "Neo"
+      })
+
       conn = get(conn, ~p"/api/auth/google/callback", %{state: query["state"], code: "c"})
+      assert %{"code" => "signup." <> _ = code} = callback_query(conn)
+      # The email does not travel readable through the loopback URL.
+      refute code =~ "new@example.com"
+      refute conn.resp_cookies["_nosilence_google_signup"]
 
-      assert %{"error" => "signup_in_browser", "next" => "http://app.test/complete-signup"} =
-               callback_query(conn)
+      # The form shows what Google gave us; no account and no token yet.
+      shown =
+        json_conn(@desktop)
+        |> post(~p"/api/auth/desktop/exchange", %{code: code, verifier: @verifier})
 
-      assert conn.resp_cookies["_nosilence_google_signup"]
+      assert json_response(shown, 200) == %{
+               "signup" => %{"email" => "new@example.com", "name" => "Neo"}
+             }
+
+      refute Accounts.get_user_by_email("new@example.com")
+
+      # Another app (another verifier) cannot use the code.
+      stolen =
+        json_conn(@desktop)
+        |> post(~p"/api/auth/desktop/complete-signup", %{
+          code: code,
+          verifier: String.duplicate("x", 43),
+          display_name: "Mallory",
+          age_confirmed: true
+        })
+
+      assert json_response(stolen, 422)
+
+      # The form is checked like the web one.
+      not_adult =
+        json_conn(@desktop)
+        |> post(~p"/api/auth/desktop/complete-signup", %{
+          code: code,
+          verifier: @verifier,
+          display_name: "Neo",
+          age_confirmed: false
+        })
+
+      assert %{"errors" => %{"age_confirmed" => _}} = json_response(not_adult, 422)
+
+      done =
+        json_conn(@desktop)
+        |> post(~p"/api/auth/desktop/complete-signup", %{
+          code: code,
+          verifier: @verifier,
+          display_name: "Neo",
+          age_confirmed: true
+        })
+
+      assert %{"token" => token, "user" => %{"display_name" => "Neo"}} = json_response(done, 200)
+      assert Accounts.get_user_by_session(token).email == "new@example.com"
+
+      # Using the code again creates nothing.
+      again =
+        json_conn(@desktop)
+        |> post(~p"/api/auth/desktop/complete-signup", %{
+          code: code,
+          verifier: @verifier,
+          display_name: "Neo 2",
+          age_confirmed: true
+        })
+
+      assert json_response(again, 422)
+    end
+
+    test "a sign-up code expires after 15 minutes" do
+      sealed =
+        Phoenix.Token.encrypt(
+          NosilenceWeb.Endpoint,
+          "desktop google sign-up",
+          %{identity: %{sub: "late", email: "late@example.com"}, challenge: challenge(@verifier)},
+          signed_at: System.system_time(:second) - 16 * 60
+        )
+
+      late =
+        json_conn(@desktop)
+        |> post(~p"/api/auth/desktop/exchange", %{code: "signup." <> sealed, verifier: @verifier})
+
+      assert json_response(late, 422)
     end
 
     test "only a loopback port and a proper challenge are accepted" do
