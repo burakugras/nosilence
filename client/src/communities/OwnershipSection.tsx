@@ -28,6 +28,11 @@ type Props = {
   refreshKey: number
   /** The current user became owner. */
   onBecameOwner: () => void
+  /**
+   * `notices`: what members should know and the candidate's offer (above the
+   * chat). `handover`: the owner's form (community settings). Both by default.
+   */
+  part?: 'notices' | 'handover'
 }
 
 /**
@@ -35,7 +40,9 @@ type Props = {
  * the candidate's accept/decline, and what everyone else should know.
  */
 export function OwnershipSection(props: Props) {
-  const { community, myRole, currentUserId, members, refreshKey, onBecameOwner } = props
+  const { community, myRole, currentUserId, members, refreshKey, onBecameOwner, part } = props
+  const notices = part !== 'handover'
+  const handover = part !== 'notices'
   const [state, setState] = useState<TransferState>()
   const transfer = state?.transfer
   const [offer, setOffer] = useState<OwnershipOffer>()
@@ -68,18 +75,18 @@ export function OwnershipSection(props: Props) {
 
   return (
     <>
-      {transfer?.status === 'deleting' && transfer.delete_at && (
+      {notices && transfer?.status === 'deleting' && transfer.delete_at && (
         <p className="banner danger-banner" role="alert">
           Nobody took over this community. It will be deleted on {when(transfer.delete_at)}.
         </p>
       )}
-      {transfer?.status === 'offered' && transfer.kind === 'account_deleted' && (
+      {notices && transfer?.status === 'offered' && transfer.kind === 'account_deleted' && (
         <p className="banner" role="status">
           The owner deleted their account and offered this community to members they chose. If none
           of them accepts, it will be deleted.
         </p>
       )}
-      {offer && (
+      {notices && offer && (
         <div className="banner" role="alert">
           <p>
             You are offered ownership of <strong>{offer.community.name}</strong>. Please answer by{' '}
@@ -93,7 +100,7 @@ export function OwnershipSection(props: Props) {
           </button>
         </div>
       )}
-      {myRole === 'owner' && state && (
+      {handover && myRole === 'owner' && state && (
         <HandOver
           community={community}
           availableAt={state.handover_available_at}

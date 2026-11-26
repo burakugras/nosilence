@@ -3,10 +3,17 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/http'
 import type { Message } from '../api/messages'
-import type { VoiceJoin } from '../api/voice'
 import type { CommunityListener, ConnectCommunity } from '../gateway/types'
 import { GatewayContext } from '../gateway/useCommunityLive'
-import { CommunityPage } from './CommunityPage'
+import { AppLayout } from '../layout/AppLayout'
+import { closeDialog } from '../settings/settingsDialog'
+
+// Addresses hold real ids (UUIDs).
+const C = '0c100000-0000-4000-8000-000000000001'
+const VOICE = '0c400000-0000-4000-8000-000000000001'
+const T1 = '07100000-0000-4000-8000-000000000001'
+const T2 = '07200000-0000-4000-8000-000000000002'
+const T3 = '07300000-0000-4000-8000-000000000003'
 
 // Plain functions instead of vi.fn for anything that may reject (see RegisterPage.test.tsx).
 let role: 'owner' | 'member' = 'owner'
@@ -14,11 +21,11 @@ const extraMembers: { user_id: string; display_name: string; role: 'member' }[] 
 vi.mock('../api/communities', () => ({
   getCommunity: () =>
     Promise.resolve({
-      community: { id: 'c1', name: 'Ekip', role },
+      community: { id: C, name: 'Ekip', role },
       channels: [
-        { id: 'ch1', name: 'General', kind: 'voice', capacity: 8 },
-        { id: 't1', name: 'general', kind: 'text', capacity: null, unread: 0 },
-        { id: 't2', name: 'news', kind: 'text', capacity: null, unread: 4 },
+        { id: VOICE, name: 'General', kind: 'voice', capacity: 8 },
+        { id: T1, name: 'general', kind: 'text', capacity: null, unread: 0 },
+        { id: T2, name: 'news', kind: 'text', capacity: null, unread: 4 },
       ],
     }),
   listMembers: () =>
@@ -30,12 +37,19 @@ vi.mock('../api/communities', () => ({
   listInvites: () => Promise.resolve([]),
   getTransfer: () => Promise.resolve({ transfer: null, handover_available_at: null }),
   listOffers: () => Promise.resolve([]),
+  listCommunities: () => Promise.resolve([]),
+}))
+
+let joinError: ApiError | undefined
+vi.mock('../api/voice', () => ({
+  requestChannelJoin: () =>
+    joinError ? Promise.reject(joinError) : new Promise(() => {}) /* never connects here */,
 }))
 
 const message = (id: string, text: string, authorId = 'u2'): Message => ({
   id,
   seq: id.length,
-  channel_id: 't1',
+  channel_id: T1,
   text,
   author: { id: authorId, display_name: authorId === 'u1' ? 'Burak' : 'Ayşe' },
   inserted_at: `2026-11-19T10:00:0${id.length}.000000Z`,
@@ -67,84 +81,98 @@ vi.mock('../api/messages', () => ({
 
 /** A fake live connection the test drives by hand. */
 function fakeGateway() {
-  const state: { listener?: CommunityListener; voice: (string | null)[] } = { voice: [] }
+  const state: { listener?: CommunityListener } = {}
   const connect: ConnectCommunity = (_id, listener) => {
     state.listener = listener
     queueMicrotask(() => listener.joined())
-    return { setVoiceChannel: (id) => state.voice.push(id), close: () => {} }
+    return { setVoiceChannel: () => {}, close: () => {} }
   }
   return { connect, state }
 }
 
-function renderPage(gateway = fakeGateway(), join?: () => Promise<VoiceJoin>) {
+const user = { id: 'u1', email: 'b@x', display_name: 'Burak', username: 'burak' }
+
+function renderCommunity(path = `/c/${C}`) {
+  const gateway = fakeGateway()
   render(
     <GatewayContext.Provider value={gateway.connect}>
-      <CommunityPage communityId="c1" currentUserId="u1" join={join} />
+      <AppLayout user={user} path={path} params={new URLSearchParams()} />
     </GatewayContext.Provider>,
   )
   return gateway
 }
 
-describe('CommunityPage', () => {
+const communityMenu = async () => {
+  fireEvent.click(await screen.findByRole('button', { name: 'Ekip' }))
+  return screen.getByRole('dialog', { name: 'Ekip menu' })
+}
+
+describe('a community', () => {
   beforeEach(() => {
     role = 'owner'
+    joinError = undefined
     sent.length = 0
     extraMembers.length = 0
     stored.length = 0
+    act(closeDialog)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 
-  it('owners see channel, invite and delete controls', async () => {
-    renderPage()
+  it('the owner runs it from the menu: settings with channels, members, invites, ownership', async () => {
+    renderCommunity()
+    const menu = await communityMenu()
+    expect(within(menu).getByRole('button', { name: /Invite people/ })).toBeInTheDocument()
+    expect(within(menu).getByRole('button', { name: /Delete community/ })).toBeInTheDocument()
 
-    expect(await screen.findByRole('heading', { name: 'Ekip' })).toBeInTheDocument()
-    expect(screen.getByText('General')).toBeInTheDocument()
-    expect(screen.getByRole('form', { name: 'New channel' })).toBeInTheDocument()
-    expect(screen.getByRole('form', { name: 'New invite' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Delete this community' })).toBeInTheDocument()
-    expect(await screen.findByRole('button', { name: 'Remove' })).toBeInTheDocument()
+    fireEvent.click(within(menu).getByRole('button', { name: /Community settings/ }))
+    const settings = screen.getByRole('dialog', { name: 'Ekip' })
+    for (const section of ['Overview', 'Channels', 'Members and roles', 'Invites', 'Ownership'])
+      expect(within(settings).getByRole('button', { name: section })).toBeInTheDocument()
+
+    fireEvent.click(within(settings).getByRole('button', { name: 'Channels' }))
+    expect(within(settings).getByRole('form', { name: 'New channel' })).toBeInTheDocument()
+    fireEvent.click(within(settings).getByRole('button', { name: 'Invites' }))
+    expect(await within(settings).findByRole('form', { name: 'New invite' })).toBeInTheDocument()
   })
 
-  it('members see neither invite nor channel controls, and can leave', async () => {
+  it('a member can only leave; no management anywhere', async () => {
     role = 'member'
-    renderPage()
-
-    expect(await screen.findByRole('heading', { name: 'Ekip' })).toBeInTheDocument()
-    expect(screen.queryByRole('form', { name: 'New invite' })).toBeNull()
-    expect(screen.queryByRole('form', { name: 'New channel' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Leave this community' })).toBeInTheDocument()
-    const members = await screen.findByRole('list', { name: 'Members' })
-    expect(await within(members).findByText('Ayşe')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull()
+    renderCommunity()
+    const menu = await communityMenu()
+    expect(within(menu).getByRole('button', { name: /Leave community/ })).toBeInTheDocument()
+    expect(within(menu).queryByRole('button', { name: /Community settings/ })).toBeNull()
+    expect(within(menu).queryByRole('button', { name: /Invite people/ })).toBeNull()
   })
 
-  it('shows the server message when a channel is full', async () => {
-    const join = (): Promise<VoiceJoin> =>
-      Promise.reject(new ApiError('this voice channel is full', 409))
-    renderPage(fakeGateway(), join)
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Join' }))
+  it('shows the server message when a voice channel is full', async () => {
+    joinError = new ApiError('this voice channel is full', 409)
+    renderCommunity()
+    fireEvent.click(await screen.findByRole('button', { name: 'Join General' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('this voice channel is full')
   })
 
   it('shows who is online and who is in each voice channel', async () => {
-    const { state } = renderPage()
-    await within(await screen.findByRole('list', { name: 'Members' })).findByText('Ayşe')
+    const { state } = renderCommunity()
+    await screen.findByRole('list', { name: 'Members offline' })
 
     act(() =>
       state.listener!.presence([
         { id: 'u1', display_name: 'Burak', voice_channel_id: null },
-        { id: 'u2', display_name: 'Ayşe', voice_channel_id: 'ch1' },
+        { id: 'u2', display_name: 'Ayşe', voice_channel_id: VOICE },
       ]),
     )
 
-    const voice = screen.getByRole('list', { name: 'Voice channels' })
-    expect(within(voice).getByText('· 1/8')).toBeInTheDocument()
-    expect(within(voice).getByText(/Ayşe/)).toBeInTheDocument()
-    expect(screen.getAllByRole('img', { name: 'online' })).toHaveLength(2)
+    expect(screen.getByText('1/8')).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('list', { name: 'In General' })).getByText('Ayşe'),
+    ).toBeInTheDocument()
+    const online = screen.getByRole('list', { name: 'Members online' })
+    expect(within(online).getByText('Ayşe')).toBeInTheDocument()
+    expect(within(online).getByText('Burak')).toBeInTheDocument()
   })
 
   it('shows messages, live updates, and sends with Enter', async () => {
-    const { state } = renderPage()
+    const { state } = renderCommunity()
     expect(await screen.findByText('hello')).toBeInTheDocument()
 
     act(() =>
@@ -152,7 +180,7 @@ describe('CommunityPage', () => {
     )
     expect(screen.getByText('live message')).toBeInTheDocument()
 
-    act(() => state.listener!.event({ type: 'message_deleted', id: 'm1', channel_id: 't1' }))
+    act(() => state.listener!.event({ type: 'message_deleted', id: 'm1', channel_id: T1 }))
     expect(screen.queryByText('hello')).toBeNull()
 
     const box = screen.getByRole('textbox', { name: 'Message #general' })
@@ -163,25 +191,26 @@ describe('CommunityPage', () => {
   })
 
   it('new members and channels appear without a reload', async () => {
-    const { state } = renderPage()
-    const members = await screen.findByRole('list', { name: 'Members' })
-    await within(members).findByText('Ayşe')
+    const { state } = renderCommunity()
+    await within(await screen.findByRole('list', { name: 'Members offline' })).findByText('Ayşe')
 
     extraMembers.push({ user_id: 'u3', display_name: 'Cem', role: 'member' })
     act(() => state.listener!.event({ type: 'member_joined', user_id: 'u3', display_name: 'Cem' }))
-    expect(await within(members).findByText('Cem')).toBeInTheDocument()
+    expect(
+      await within(screen.getByRole('list', { name: 'Members offline' })).findByText('Cem'),
+    ).toBeInTheDocument()
 
     act(() =>
       state.listener!.event({
         type: 'channel_created',
-        channel: { id: 't3', name: 'duyurular', kind: 'text', capacity: null },
+        channel: { id: T3, name: 'duyurular', kind: 'text', capacity: null },
       }),
     )
-    expect(screen.getByRole('button', { name: '#duyurular' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '#duyurular' })).toBeInTheDocument()
   })
 
   it('a deleted account shows as "Deleted user" at once, or its messages go', async () => {
-    const { state } = renderPage()
+    const { state } = renderCommunity()
     expect(await screen.findByText('hello')).toBeInTheDocument()
 
     act(() =>
@@ -201,36 +230,43 @@ describe('CommunityPage', () => {
   })
 
   it('the channel list shows unread counts and counts new messages elsewhere live', async () => {
-    const { state } = renderPage()
-    expect(await screen.findByLabelText('4 unread')).toHaveTextContent('4')
+    const { state } = renderCommunity()
+    expect(await screen.findByRole('link', { name: '#news, 4 unread' })).toBeInTheDocument()
 
     act(() =>
       state.listener!.event({
         type: 'message_created',
-        message: { ...message('m55555', 'news!'), channel_id: 't2' },
+        message: { ...message('m55555', 'news!'), channel_id: T2 },
       }),
     )
-    expect(screen.getByLabelText('5 unread')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '#news, 5 unread' })).toBeInTheDocument()
     // The user's own messages elsewhere do not count.
     act(() =>
       state.listener!.event({
         type: 'message_created',
-        message: { ...message('m666666', 'mine', 'u1'), channel_id: 't2' },
+        message: { ...message('m666666', 'mine', 'u1'), channel_id: T2 },
       }),
     )
-    expect(screen.getByLabelText('5 unread')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '#news, 5 unread' })).toBeInTheDocument()
+  })
+
+  it('opens the text channel in the address', async () => {
+    renderCommunity(`/c/${C}/${T2}`)
+    expect(await screen.findByRole('textbox', { name: 'Message #news' })).toBeInTheDocument()
+    // The open channel is marked; reading it clears its count.
+    expect(screen.getByRole('link', { name: /^#news/ })).toHaveAttribute('aria-current', 'page')
   })
 
   it('a removed member sees "Community not found" at once', async () => {
-    const { state } = renderPage()
-    await screen.findByRole('heading', { name: 'Ekip' })
+    const { state } = renderCommunity()
+    await screen.findByRole('button', { name: 'Ekip' })
 
     act(() => state.listener!.removed())
     expect(screen.getByRole('heading', { name: 'Community not found' })).toBeInTheDocument()
   })
 
   it('edits the user’s own message and shows others’ edits live', async () => {
-    const { state } = renderPage()
+    const { state } = renderCommunity()
     expect(await screen.findByText('hello')).toBeInTheDocument()
     // Only the author can edit.
     expect(screen.queryByRole('button', { name: 'Edit message' })).toBeNull()

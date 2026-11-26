@@ -8,6 +8,8 @@ let preview: () => Promise<unknown> = () => Promise.resolve({ id: 'c1', name: 'E
 
 vi.mock('../api/communities', () => ({
   previewInvite: () => preview(),
+  // The rail is refreshed after joining.
+  listCommunities: () => Promise.resolve([]),
   acceptInvite: (token: string) => {
     accepted(token)
     return Promise.resolve({ id: 'c1', name: 'Ekip' })

@@ -1,5 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react'
 import {
   addMembers,
   asMessage,
@@ -17,12 +25,23 @@ import { Link } from '../components/Link'
 import type { LiveEvent } from '../gateway/types'
 import { useUserEvents } from '../gateway/userLive'
 import { navigate } from '../router'
+import { Avatar } from '../ui/Avatar'
+import { Icon } from '../ui/Icon'
 import { conversationTitle, refreshSoon, useConversations } from './conversationsStore'
 
 const MAX_GROUP = 10
 
 /** One direct or group conversation (ADR 0015), in the same chat view as text channels. */
-export function ConversationPage({ id, currentUserId }: { id: string; currentUserId: string }) {
+export function ConversationPage({
+  id,
+  currentUserId,
+  menuButton,
+}: {
+  id: string
+  currentUserId: string
+  /** Narrow windows: opens the channel column. */
+  menuButton?: ReactNode
+}) {
   const conversations = useConversations()
   const conversation = conversations?.find((c) => c.id === id)
   const [generation, setGeneration] = useState(0)
@@ -64,40 +83,58 @@ export function ConversationPage({ id, currentUserId }: { id: string; currentUse
     [],
   )
 
-  if (conversations === undefined) return <p role="status">Loading…</p>
+  if (conversations === undefined)
+    return (
+      <p className="empty" role="status">
+        Loading…
+      </p>
+    )
   if (!conversation) {
     return (
-      <section>
+      <div className="empty">
         <h2>Conversation not found</h2>
-        <Link to="/messages">← Messages</Link>
-      </section>
+        <Link to="/">Back home</Link>
+      </div>
     )
   }
 
   const title = conversationTitle(conversation, currentUserId)
+  const other = conversation.members.find((m) => m.id !== currentUserId)
   return (
-    <section>
-      <p>
-        <Link to="/messages">← Messages</Link>
-      </p>
-      {conversation.kind === 'group' && (
-        <GroupDetails conversation={conversation} currentUserId={currentUserId} />
-      )}
-      <TextChannel
-        key={id}
-        channel={{ id, name: title }}
-        api={api}
-        title={title}
-        notice={
-          <p className="muted not-e2ee">
+    <TextChannel
+      key={id}
+      channel={{ id, name: title }}
+      api={api}
+      title={title}
+      icon={
+        conversation.kind === 'direct' && other ? (
+          <Avatar id={other.id} name={other.display_name} size="small" />
+        ) : (
+          <Icon name="people" />
+        )
+      }
+      subtitle={
+        conversation.kind === 'direct'
+          ? other?.username
+            ? `@${other.username}`
+            : undefined
+          : conversation.members.map((m) => m.display_name).join(', ')
+      }
+      headerStart={menuButton}
+      notice={
+        <>
+          <p className="not-e2ee">
             Messages here are not end-to-end encrypted yet: the Nosilence server can read them.
           </p>
-        }
-        currentUserId={currentUserId}
-        canDeleteAny={false}
-        live={live}
-      />
-    </section>
+          {conversation.kind === 'group' && (
+            <GroupDetails conversation={conversation} currentUserId={currentUserId} />
+          )}
+        </>
+      }
+      currentUserId={currentUserId}
+      canDeleteAny={false}
+      live={live}
+    />
   )
 }
 

@@ -44,6 +44,7 @@ const PTT = process.argv.includes('--ptt')
 const REJOIN = process.argv.includes('--rejoin')
 const STAY = process.argv.includes('--stay')
 const SOCIAL = process.argv.includes('--social')
+const MUTE = process.argv.includes('--mute')
 const ONLY = arg('only', '') ? arg('only', '').split(',') : null
 // How many times each reconnect is measured (median and p95 reported).
 const RECONNECTS = Number(arg('reconnects', '5'))
@@ -317,8 +318,12 @@ async function open(b, user, url) {
   return page
 }
 
+// The layout of ADR 0016: voice channels in the channel column, the call's
+// state and Leave in the voice panel at the bottom left.
 const joinButton = (page) =>
-  page.getByRole('list', { name: 'Voice channels' }).getByRole('button', { name: 'Join' })
+  page.getByRole('list', { name: 'Voice channels' }).getByRole('button', { name: /^Join / }).first()
+const encrypted = (page) => page.getByRole('button', { name: /^Voice connected:/ })
+const leaveCall = (page) => page.getByRole('button', { name: 'Leave call' })
 
 /** Pairs each heard tick with the capture it came from; returns delays in ms. */
 function delays(captured, heard, from, to) {
@@ -447,14 +452,17 @@ async function socialCheck(sender, user) {
     await box.press('Enter')
 
     const tab = sender.page
-    const badge = tab.getByRole('link', { name: /^Messages/ }).getByLabel(/unread/)
+    const badge = tab.getByRole('link', { name: /^Home, \d+ unread/ })
     let badgeSeen = false
     try {
       await badge.waitFor({ timeout: 5_000 })
       badgeSeen = true
     } catch {}
-    await tab.getByRole('link', { name: /^Messages/ }).click()
-    await tab.getByRole('link', { name: rx.display_name }).click()
+    await tab.getByRole('link', { name: /^Home/ }).click()
+    await tab
+      .getByRole('navigation', { name: 'Home' })
+      .getByRole('link', { name: new RegExp(`^${rx.display_name}`) })
+      .click()
     let shown = false
     try {
       await tab.getByText(text).waitFor({ timeout: 5_000 })
@@ -476,9 +484,20 @@ async function stayInCallCheck(sender, community, user) {
   try {
     const rx = await open(b, user, `${APP}/c/${community.id}`)
     await joinButton(rx).click()
-    await rx.getByText('End-to-end encrypted.').waitFor({ timeout: 20_000 })
-    for (const [label, link] of [['settings', 'Settings'], ['account', user.name]]) {
-      await rx.getByRole('link', { name: link, exact: true }).click()
+    await encrypted(rx).waitFor({ timeout: 20_000 })
+    // Settings (a window), then Home: the call must go on.
+    const steps = [
+      ['settings', () => rx.getByRole('button', { name: 'Settings' }).click()],
+      [
+        'home',
+        async () => {
+          await rx.keyboard.press('Escape')
+          await rx.getByRole('link', { name: /^Home/ }).click()
+        },
+      ],
+    ]
+    for (const [label, step] of steps) {
+      await step()
       await wait(1_000)
       const before = await rx.evaluate('window.__ticks.heard.length')
       await wait(3_000)
@@ -506,15 +525,15 @@ async function rejoinCheck(sender, community, user) {
     if (arg('rejoin-who', 'second') === 'first') {
       // The first member (who started the MLS group) leaves and joins again.
       await joinButton(rx).click()
-      await rx.getByText('End-to-end encrypted.').waitFor({ timeout: 20_000 })
+      await encrypted(rx).waitFor({ timeout: 20_000 })
       const tx = sender.page
       tx.on('console', (m) => m.type() === 'error' && console.log('[tx error]', m.text().slice(0, 300)))
       for (let round = 1; round <= 3; round++) {
-        await tx.locator('.voice-room').getByRole('button', { name: 'Leave', exact: true }).click()
+        await leaveCall(tx).click()
         await wait(1_000)
         await joinButton(tx).click()
         const outcome = await Promise.race([
-          tx.getByText('End-to-end encrypted.').waitFor({ timeout: 20_000 }).then(() => 'encrypted'),
+          encrypted(tx).waitFor({ timeout: 20_000 }).then(() => 'encrypted'),
           tx.getByText(/could not be encrypted/).waitFor({ timeout: 20_000 }).then(() => 'failed'),
         ]).catch(() => 'timeout')
         const before = await rx.evaluate('window.__ticks.heard.length')
@@ -527,16 +546,44 @@ async function rejoinCheck(sender, community, user) {
     for (let round = 1; round <= 3; round++) {
       await joinButton(rx).click()
       const outcome = await Promise.race([
-        rx.getByText('End-to-end encrypted.').waitFor({ timeout: 20_000 }).then(() => 'encrypted'),
+        encrypted(rx).waitFor({ timeout: 20_000 }).then(() => 'encrypted'),
         rx.getByText(/could not be encrypted/).waitFor({ timeout: 20_000 }).then(() => 'failed'),
       ]).catch(() => 'timeout')
       const before = await rx.evaluate('window.__ticks.heard.length')
       await wait(2_000)
       const heard = (await rx.evaluate('window.__ticks.heard.length')) - before
       console.log(`${outcome === 'encrypted' && heard > 3 ? 'PASS' : 'FAIL'} join ${round}: ${outcome}, ${heard} ticks in 2 s`)
-      await rx.locator('.voice-room').getByRole('button', { name: 'Leave', exact: true }).click()
+      await leaveCall(rx).click()
       await wait(1_000)
     }
+  } finally {
+    await b.close()
+  }
+}
+
+/** The Mute button (bottom left): nothing is heard while muted. */
+async function muteCheck(sender, community, user) {
+  const b = await browser()
+  try {
+    const rx = await open(b, user, `${APP}/c/${community.id}`)
+    await joinButton(rx).click()
+    await encrypted(rx).waitFor({ timeout: 20_000 })
+    const heardIn = async (ms) => {
+      const before = await rx.evaluate('window.__ticks.heard.length')
+      await wait(ms)
+      return (await rx.evaluate('window.__ticks.heard.length')) - before
+    }
+    const open1 = await heardIn(3_000)
+    await sender.page.getByRole('button', { name: 'Mute' }).click()
+    await wait(500)
+    const muted = await heardIn(3_000)
+    await sender.page.getByRole('button', { name: 'Mute' }).click()
+    await wait(500)
+    const open2 = await heardIn(3_000)
+    const ok = open1 >= 8 && muted === 0 && open2 >= 8
+    console.log(
+      `${ok ? 'PASS' : 'FAIL'} mute: ${open1} ticks in 3 s before, ${muted} while muted, ${open2} after unmuting`,
+    )
   } finally {
     await b.close()
   }
@@ -548,7 +595,7 @@ async function pushToTalkCheck(sender, community, user) {
   try {
     const rx = await open(b, user, `${APP}/c/${community.id}`)
     await joinButton(rx).click()
-    await rx.getByText('End-to-end encrypted.').waitFor({ timeout: 20_000 })
+    await encrypted(rx).waitFor({ timeout: 20_000 })
     const heard = () => rx.evaluate('window.__ticks.heard.length')
     await wait(3_000)
     const before = await heard()
@@ -587,7 +634,7 @@ async function listen(sender, community, user) {
     try {
       const rx = await open(b, user, `${APP}/c/${community.id}`)
       await joinButton(rx).click()
-      await rx.getByText('End-to-end encrypted.').waitFor({ timeout: 20_000 })
+      await encrypted(rx).waitFor({ timeout: 20_000 })
       await wait(2_000)
       const s0 = await rx.evaluate('window.__inbound()')
       await rx.evaluate('window.__recordingStart()')
@@ -631,7 +678,7 @@ try {
     await page.reload()
   }
   await joinButton(page).click()
-  await page.getByText('End-to-end encrypted.').waitFor({ timeout: 20_000 })
+  await encrypted(page).waitFor({ timeout: 20_000 })
   const sender = { user: owner, page }
   if (LISTEN) {
     await listen(sender, community, receiver)
@@ -644,7 +691,7 @@ try {
   if (process.argv.includes('--settings-shot')) {
     // A picture of the voice settings in push-to-talk mode, for checking the layout.
     await page.goto(`${APP}/settings`)
-    await page.getByRole('radio', { name: /Push to talk/ }).click()
+    await page.getByRole('dialog', { name: 'Settings' }).getByRole('radio', { name: /Push to talk/ }).click()
     const file = join(fileURLToPath(new URL('.', import.meta.url)), 'recordings', 'settings.png')
     await page.screenshot({ path: file, fullPage: true })
     console.log(file)
@@ -656,6 +703,10 @@ try {
   }
   if (STAY) {
     await stayInCallCheck(sender, community, receiver)
+    process.exit(0)
+  }
+  if (MUTE) {
+    await muteCheck(sender, community, receiver)
     process.exit(0)
   }
   if (SOCIAL) {

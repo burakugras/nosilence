@@ -24,6 +24,22 @@ import { formatWait, useCountdown, withoutWait } from '../components/useCountdow
 import type { CommunityLive } from '../gateway/useCommunityLive'
 import { merge, reconcile, type History } from './messageHistory'
 import { MAX_MESSAGE, messageError } from '../validation'
+import { Avatar } from '../ui/Avatar'
+
+/** Messages by the same person within this time are shown as one group. */
+const GROUP_MS = 5 * 60 * 1000
+
+/** "20:14" today, "Yesterday 20:14", or the date. */
+function when(iso: string) {
+  const date = new Date(iso)
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const days = Math.round(
+    (new Date().setHours(0, 0, 0, 0) - new Date(iso).setHours(0, 0, 0, 0)) / 86_400_000,
+  )
+  if (days === 0) return `Today ${time}`
+  if (days === 1) return `Yesterday ${time}`
+  return `${date.toLocaleDateString()} ${time}`
+}
 
 /** Unread messages already on screen when the channel opens stay tinted this long. */
 const OPENING_TINT_MS = 3000
@@ -68,8 +84,17 @@ type Props = {
   api?: MessageApi
   /** The heading and the composer's label; "#<channel name>" by default. */
   title?: string
+  /** The composer's label when it differs from the title ("#general"). */
+  composerName?: string
   /** Shown under the heading (for example "not end-to-end encrypted"). */
   notice?: ReactNode
+  /** In front of the title in the header (an icon). */
+  icon?: ReactNode
+  /** Next to the title, smaller (the other person's @username). */
+  subtitle?: string
+  /** Buttons at the start and end of the header (menu, members). */
+  headerStart?: ReactNode
+  headerEnd?: ReactNode
   currentUserId: string
   /** Owners may delete anyone's messages. */
   canDeleteAny: boolean
@@ -82,7 +107,12 @@ export function TextChannel({
   channel,
   api = CHANNEL_API,
   title = `#${channel.name}`,
+  composerName = title,
   notice,
+  icon,
+  subtitle,
+  headerStart,
+  headerEnd,
   currentUserId,
   canDeleteAny,
   live,
@@ -387,74 +417,118 @@ export function TextChannel({
 
   return (
     <section className="text-channel" aria-label={title}>
-      <h3>{title}</h3>
+      <header className="main-header">
+        {headerStart}
+        <h1>
+          {icon}
+          {title}
+        </h1>
+        <span className="topic">{subtitle}</span>
+        {headerEnd}
+      </header>
       {notice}
-      {history?.hasMore && (
-        <button type="button" className="link-button" onClick={() => void loadOlder()}>
-          Load older messages
-        </button>
-      )}
       {messages === undefined ? (
-        <p role="status">Loading messages…</p>
+        <p role="status" className="empty">
+          Loading messages…
+        </p>
       ) : messages.length === 0 ? (
-        <p className="muted">No messages yet. Say hello!</p>
+        <p className="empty">No messages yet. Say hello!</p>
       ) : (
         <div className="messages-wrap">
           <ol className="messages" aria-label="Messages" ref={list} onScroll={onScroll}>
-            {messages.map((m) => (
-              <li
-                key={m.id}
-                data-message-id={m.id}
-                className={
-                  [m.id === firstUnseenId && 'first-unseen', unseenIds.includes(m.id) && 'unseen']
-                    .filter(Boolean)
-                    .join(' ') || undefined
-                }
-              >
-                <div className="message-head">
-                  <strong>{m.author?.display_name ?? 'Deleted user'}</strong>{' '}
-                  <time className="muted" dateTime={m.inserted_at}>
-                    {new Date(m.inserted_at).toLocaleString()}
-                  </time>
-                  {m.edited_at && <span className="muted">(edited)</span>}
-                  {m.author?.id === currentUserId &&
-                    editingId !== m.id &&
-                    (m.edits_left ?? 1) > 0 && (
-                      <button
-                        type="button"
-                        className="link-button"
-                        aria-label="Edit message"
-                        onClick={() => setEditingId(m.id)}
-                      >
-                        Edit
-                      </button>
-                    )}
-                  {(canDeleteAny || m.author?.id === currentUserId) && (
-                    <button
-                      type="button"
-                      className="link-button"
-                      aria-label="Delete message"
-                      onClick={() => void remove(m)}
-                    >
-                      Delete
-                    </button>
-                  )}
-                </div>
-                {editingId === m.id ? (
-                  <EditBox
-                    edit={api.edit}
-                    message={m}
-                    onDone={(edited) => {
-                      if (edited) update((ms) => ms.map((x) => (x.id === edited.id ? edited : x)))
-                      setEditingId(undefined)
-                    }}
-                  />
-                ) : (
-                  /* Rendered as text, never as HTML. */
-                  <p className="message-text">{m.text}</p>
-                )}
+            {history?.hasMore && (
+              <li className="load-older">
+                <button type="button" className="secondary" onClick={() => void loadOlder()}>
+                  Load older messages
+                </button>
               </li>
-            ))}
+            )}
+            {messages.map((m, i) => {
+              const prev = messages[i - 1]
+              const grouped =
+                !!prev &&
+                prev.author?.id === m.author?.id &&
+                m.id !== firstUnseenId &&
+                new Date(m.inserted_at).getTime() - new Date(prev.inserted_at).getTime() < GROUP_MS
+              const name = m.author?.display_name ?? 'Deleted user'
+              return (
+                <li
+                  key={m.id}
+                  data-message-id={m.id}
+                  className={
+                    [
+                      !grouped && 'grouped-start',
+                      m.id === firstUnseenId && 'first-unseen',
+                      unseenIds.includes(m.id) && 'unseen',
+                    ]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  }
+                >
+                  <div className="gutter">
+                    {grouped ? (
+                      <time dateTime={m.inserted_at}>
+                        {new Date(m.inserted_at).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </time>
+                    ) : (
+                      <Avatar id={m.author?.id ?? 'deleted'} name={name} size="large" />
+                    )}
+                  </div>
+                  <div className="body">
+                    {!grouped && (
+                      <div className="message-head">
+                        <strong>{name}</strong>
+                        <time dateTime={m.inserted_at}>{when(m.inserted_at)}</time>
+                      </div>
+                    )}
+                    <div className="message-actions">
+                      {m.author?.id === currentUserId &&
+                        editingId !== m.id &&
+                        (m.edits_left ?? 1) > 0 && (
+                          <button
+                            type="button"
+                            className="link-button"
+                            aria-label="Edit message"
+                            onClick={() => setEditingId(m.id)}
+                          >
+                            Edit
+                          </button>
+                        )}
+                      {(canDeleteAny || m.author?.id === currentUserId) && (
+                        <button
+                          type="button"
+                          className="link-button"
+                          aria-label="Delete message"
+                          onClick={() => void remove(m)}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                    {editingId === m.id ? (
+                      <EditBox
+                        edit={api.edit}
+                        message={m}
+                        onDone={(edited) => {
+                          if (edited)
+                            update((ms) => ms.map((x) => (x.id === edited.id ? edited : x)))
+                          setEditingId(undefined)
+                        }}
+                      />
+                    ) : (
+                      /* Rendered as text, never as HTML. */
+                      <p className="message-text">
+                        {m.text}
+                        {m.edited_at && <span className="edited"> (edited)</span>}
+                      </p>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
           </ol>
           {unseenIds.length > 0 && (
             <button type="button" className="new-messages" onClick={jumpToFirstUnseen}>
@@ -468,10 +542,11 @@ export function TextChannel({
       )}
       <form className="composer" onSubmit={(e) => void send(e)} aria-label="Send a message">
         <textarea
-          aria-label={`Message ${title}`}
+          aria-label={`Message ${composerName}`}
+          placeholder={`Message ${composerName}`}
           value={text}
           maxLength={MAX_MESSAGE}
-          rows={2}
+          rows={1}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
         />
@@ -479,6 +554,7 @@ export function TextChannel({
           Send
         </button>
       </form>
+      <p className="composer-hint">Enter to send, Shift+Enter for a new line</p>
       <FormMessage
         text={
           wait.secondsLeft > 0

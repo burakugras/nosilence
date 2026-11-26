@@ -1,31 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { lazy, Suspense, useContext, useEffect, useRef } from 'react'
-import { Link } from '../components/Link'
 import { sharing } from '../gateway/sharedConnections'
 import type { CommunityConnection } from '../gateway/types'
 import { GatewayContext } from '../gateway/useCommunityLive'
-import { useLocation } from '../router'
 import { endCall, useCall, type Call } from './call'
 
+// LiveKit is large; load it only when the user joins a channel.
 const VoiceRoom = lazy(() => import('./VoiceRoom').then((m) => ({ default: m.VoiceRoom })))
 
 /**
- * The ongoing call, shown above every page while the user is signed in, so
- * moving around the app never drops it.
+ * The ongoing call. It belongs to the app, not to a page, so moving around
+ * never drops it. It shows nothing itself: the voice panel at the bottom left
+ * shows its state (ADR 0016).
  */
 export function ActiveCall() {
   const call = useCall()
   if (!call) return null
-  return <CallPanel key={`${call.communityId}/${call.channel.id}`} call={call} />
+  return <CallHolder key={`${call.communityId}/${call.channel.id}`} call={call} />
 }
 
-function CallPanel({ call }: { call: Call }) {
+function CallHolder({ call }: { call: Call }) {
   const connect = sharing(useContext(GatewayContext))
   const connection = useRef<CommunityConnection>(undefined)
-  const { path } = useLocation()
 
   // The call's own hold on the community's live connection: others see the
-  // user in the voice channel even when the community page is closed.
+  // user in the voice channel even when the community is not on screen.
   useEffect(() => {
     const conn = connect(call.communityId, {
       presence: () => {},
@@ -42,22 +41,16 @@ function CallPanel({ call }: { call: Call }) {
   }, [connect, call.communityId])
 
   return (
-    <section className="active-call" aria-label="Ongoing call">
-      {path !== `/c/${call.communityId}` && (
-        <p className="muted">
-          <Link to={`/c/${call.communityId}`}>Open {call.communityName}</Link>
-        </p>
-      )}
-      <Suspense fallback={<p>Connecting…</p>}>
+    <div hidden>
+      <Suspense fallback={null}>
         <VoiceRoom
           join={call.join}
           channelId={call.channel.id}
           joinStartedAt={call.startedAt}
-          title={`${call.communityName} · ${call.channel.name}`}
           onConnected={() => connection.current?.setVoiceChannel(call.channel.id)}
           onLeave={endCall}
         />
       </Suspense>
-    </section>
+    </div>
   )
 }

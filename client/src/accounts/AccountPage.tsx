@@ -11,24 +11,26 @@ import { listMembers, type Member } from '../api/communities'
 import { ApiError } from '../api/http'
 import { choosable } from '../communities/roles'
 import { Field, FormMessage } from '../components/Field'
-import { Link } from '../components/Link'
 
 type Props = {
   user: User
   /** The account is gone: forget the user and go to sign-in. */
   onDeleted: () => void
+  onSignOut?: () => void
 }
 
-export function AccountPage({ user, onDeleted }: Props) {
+export function AccountPage({ user, onDeleted, onSignOut }: Props) {
   return (
     <section>
-      <p>
-        <Link to="/">← Your communities</Link>
-      </p>
-      <h2>Your account</h2>
+      <h2>Account</h2>
       <p>
         {user.display_name} · <span className="muted">{user.email}</span>
       </p>
+      {onSignOut && (
+        <button type="button" className="secondary" onClick={onSignOut}>
+          Sign out
+        </button>
+      )}
       <DownloadData />
       <DeleteAccount user={user} onDeleted={onDeleted} />
     </section>

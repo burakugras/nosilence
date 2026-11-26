@@ -9,11 +9,18 @@ defmodule NosilenceWeb.CommunityController do
   action_fallback NosilenceWeb.FallbackController
 
   def index(conn, _params) do
-    communities = Communities.list_communities(conn.assigns.current_user)
+    user = conn.assigns.current_user
+    communities = Communities.list_communities(user)
+    channels = Communities.text_channels_of(Enum.map(communities, & &1.community.id))
+    unread = Nosilence.Messaging.unread_counts(user, channels |> Map.values() |> List.flatten())
 
     json(conn, %{
       communities:
-        Enum.map(communities, &%{id: &1.community.id, name: &1.community.name, role: &1.role})
+        Enum.map(communities, fn %{community: c, role: role} ->
+          # Unread messages from others in all its text channels (the rail's badge).
+          total = channels |> Map.get(c.id, []) |> Enum.map(&unread[&1]) |> Enum.sum()
+          %{id: c.id, name: c.name, role: role, unread: min(total, 100)}
+        end)
     })
   end
 

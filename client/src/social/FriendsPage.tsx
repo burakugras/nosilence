@@ -62,7 +62,6 @@ export function FriendsPage() {
 
   return (
     <section>
-      <h2>Friends</h2>
       <form className="stack-form" onSubmit={add} noValidate aria-label="Add a friend">
         <Field
           label="Add a friend by username"

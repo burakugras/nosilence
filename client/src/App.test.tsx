@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { setPendingDesktopSignup } from './accounts/desktopSignup'
@@ -47,11 +47,18 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
   })
 
-  it('shows the user’s communities when signed in', async () => {
+  it('signed in: communities on the rail, the user and settings at the bottom left', async () => {
     render(<App loadUser={() => Promise.resolve(user)} />)
     expect(await screen.findByRole('link', { name: 'Ekip' })).toHaveAttribute('href', '/c/c1')
-    // The name in the header leads to the account page.
-    expect(screen.getByRole('link', { name: 'Burak' })).toHaveAttribute('href', '/account')
+    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByText('@burak')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    const settings = screen.getByRole('dialog', { name: 'Settings' })
+    fireEvent.click(within(settings).getByRole('button', { name: 'Account' }))
+    expect(within(settings).getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+    fireEvent.click(within(settings).getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog', { name: 'Settings' })).toBeNull()
   })
 
   it('opens the register page from its link', async () => {
@@ -68,6 +75,7 @@ describe('App', () => {
 
   it('a pasted invite link opens the invite (the desktop app has no address bar)', async () => {
     render(<App loadUser={() => Promise.resolve(user)} />)
+    fireEvent.click(await screen.findByRole('link', { name: 'Create or join a community' }))
     const field = await screen.findByLabelText('Invite link')
     fireEvent.change(field, { target: { value: 'not a link' } })
     fireEvent.click(screen.getByRole('button', { name: 'Open invite' }))

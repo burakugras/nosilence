@@ -6,46 +6,14 @@ import { listFriends, type Person } from '../api/social'
 import { FormMessage } from '../components/Field'
 import { Link } from '../components/Link'
 import { navigate } from '../router'
-import { conversationTitle, useConversations } from './conversationsStore'
 
 const MAX_OTHERS = 9
 
-/** Direct and group conversations, newest first, and starting a group (ADR 0015). */
-export function MessagesPage({ currentUserId }: { currentUserId: string }) {
-  const conversations = useConversations()
-
-  return (
-    <section>
-      <h2>Messages</h2>
-      <p className="muted">
-        Start a direct conversation from <Link to="/friends">Friends</Link> or a community&apos;s
-        member list.
-      </p>
-      {conversations === undefined ? (
-        <p role="status">Loading…</p>
-      ) : conversations.length === 0 ? (
-        <p>No conversations yet.</p>
-      ) : (
-        <ul className="plain-list" aria-label="Conversations">
-          {conversations.map((c) => (
-            <li key={c.id}>
-              <Link to={`/messages/${c.id}`}>{conversationTitle(c, currentUserId)}</Link>
-              {c.kind === 'group' && <span className="badge">group</span>}
-              {c.unread > 0 && (
-                <span className="unread-count" aria-label={`${c.unread} unread`}>
-                  {c.unread > 99 ? '99+' : c.unread}
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      <NewGroup />
-    </section>
-  )
-}
-
-function NewGroup() {
+/**
+ * Home > "+" next to Direct messages: start a group with friends (ADR 0015).
+ * The conversations themselves are listed in the channel column.
+ */
+export function MessagesPage() {
   const [friends, setFriends] = useState<Person[]>()
   const [chosen, setChosen] = useState<string[]>([])
   const [name, setName] = useState('')
@@ -68,10 +36,17 @@ function NewGroup() {
     }
   }
 
-  if (!friends || friends.length < 2) return null
+  if (friends === undefined) return <p role="status">Loading…</p>
+  if (friends.length < 2)
+    return (
+      <p className="muted">
+        A group needs at least two friends. Add friends on the <Link to="/">Friends</Link> page; for
+        one person, use Message next to their name.
+      </p>
+    )
+
   return (
     <form className="stack-form" onSubmit={create} noValidate aria-label="New group">
-      <h3>New group</h3>
       <p className="muted">Up to ten people in all, chosen from your friends.</p>
       {friends.map((f) => (
         <label key={f.id} className="checkbox">

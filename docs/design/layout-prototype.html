@@ -1,0 +1,1458 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!--
+  Nosilence layout prototype (no real data). Open it in a browser to review the
+  layout and the two themes before the client is rebuilt on it.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nosilence layout prototype</title>
+    <style>
+      /* ---- Design tokens ------------------------------------------------ */
+      :root {
+        color-scheme: dark;
+        --bg-rail: #0b0d11;
+        --bg-side: #15171d;
+        --bg-main: #1b1e25;
+        --bg-raised: #242832;
+        --bg-hover: #2a2f3a;
+        --bg-active: #333a48;
+        --border: #2c313c;
+        --text: #e6e8ee;
+        --text-muted: #9aa1ae;
+        --text-faint: #6b7280;
+        --accent: #6d78ff;
+        --accent-text: #ffffff;
+        --success: #3ecf8e;
+        --danger: #f05d5e;
+        --warning: #f0b429;
+        --unread-tint: rgba(109, 120, 255, 0.08);
+        --shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+
+        --radius-s: 6px;
+        --radius-m: 10px;
+        --radius-l: 16px;
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 24px;
+        --space-6: 32px;
+        --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        --text-xs: 12px;
+        --text-s: 13px;
+        --text-m: 15px;
+        --text-l: 18px;
+        --text-xl: 22px;
+      }
+      :root[data-theme='light'] {
+        color-scheme: light;
+        --bg-rail: #e3e6ec;
+        --bg-side: #eef0f4;
+        --bg-main: #ffffff;
+        --bg-raised: #ffffff;
+        --bg-hover: #e6e9ef;
+        --bg-active: #d9deea;
+        --border: #d8dce4;
+        --text: #1b1e25;
+        --text-muted: #5b6372;
+        --text-faint: #8a92a0;
+        --accent: #4f5bd5;
+        --unread-tint: rgba(79, 91, 213, 0.07);
+        --shadow: 0 12px 32px rgba(20, 24, 40, 0.18);
+      }
+
+      /* ---- Base ----------------------------------------------------------- */
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        font: var(--text-m) / 1.45 var(--font);
+        color: var(--text);
+        background: var(--bg-main);
+        overflow: hidden;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+        background: none;
+        border: 0;
+        cursor: pointer;
+      }
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible,
+      textarea:focus-visible,
+      [tabindex]:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      .muted {
+        color: var(--text-muted);
+      }
+      .btn {
+        padding: var(--space-2) var(--space-4);
+        border-radius: var(--radius-s);
+        background: var(--accent);
+        color: var(--accent-text);
+        font-weight: 600;
+      }
+      .btn.secondary {
+        background: var(--bg-hover);
+        color: var(--text);
+      }
+      .btn.danger {
+        background: var(--danger);
+        color: #fff;
+      }
+      .btn.quiet-danger {
+        background: none;
+        color: var(--danger);
+      }
+      .btn.quiet-danger:hover {
+        background: var(--bg-hover);
+      }
+      .icon-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: var(--radius-s);
+        display: inline-grid;
+        place-items: center;
+        color: var(--text-muted);
+      }
+      .icon-btn:hover {
+        background: var(--bg-hover);
+        color: var(--text);
+      }
+      .icon-btn.off {
+        color: var(--danger);
+      }
+      svg {
+        width: 18px;
+        height: 18px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .badge {
+        font-size: var(--text-xs);
+        font-weight: 700;
+        padding: 0 6px;
+        border-radius: 999px;
+        background: var(--danger);
+        color: #fff;
+        line-height: 18px;
+      }
+      .role {
+        font-size: var(--text-xs);
+        color: var(--accent);
+        border: 1px solid currentColor;
+        border-radius: 999px;
+        padding: 0 6px;
+      }
+      .avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        font-size: var(--text-s);
+        font-weight: 700;
+        color: #fff;
+        flex: none;
+        position: relative;
+      }
+      .avatar .presence {
+        position: absolute;
+        right: -2px;
+        bottom: -2px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 3px solid var(--bg-side);
+        background: var(--text-faint);
+      }
+      .avatar .presence.on {
+        background: var(--success);
+      }
+
+      /* ---- Layout: rail | sidebar | main | members ------------------------ */
+      .app {
+        display: grid;
+        grid-template-columns: 72px 248px 1fr 248px;
+        height: 100vh;
+      }
+      .app.no-members {
+        grid-template-columns: 72px 248px 1fr;
+      }
+      .app.no-members .members {
+        display: none;
+      }
+
+      .rail {
+        background: var(--bg-rail);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-3) 0;
+        overflow-y: auto;
+      }
+      .rail-item {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: var(--bg-raised);
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        position: relative;
+        transition: border-radius 0.15s;
+      }
+      .rail-item:hover,
+      .rail-item[aria-current='true'] {
+        border-radius: var(--radius-l);
+        background: var(--accent);
+        color: var(--accent-text);
+      }
+      .rail-item[aria-current='true']::before {
+        content: '';
+        position: absolute;
+        left: -12px;
+        width: 4px;
+        height: 32px;
+        border-radius: 0 4px 4px 0;
+        background: var(--text);
+      }
+      .rail-item .badge {
+        position: absolute;
+        right: -4px;
+        bottom: -4px;
+        border: 3px solid var(--bg-rail);
+      }
+      .rail-divider {
+        width: 32px;
+        height: 2px;
+        background: var(--border);
+        border-radius: 2px;
+      }
+      .rail-item.add {
+        color: var(--success);
+        background: var(--bg-raised);
+      }
+      .rail-item.add:hover {
+        background: var(--success);
+        color: #fff;
+      }
+
+      .sidebar {
+        background: var(--bg-side);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .side-header {
+        height: 52px;
+        padding: 0 var(--space-4);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--border);
+        font-weight: 700;
+        width: 100%;
+        text-align: left;
+      }
+      button.side-header:hover {
+        background: var(--bg-hover);
+      }
+      .side-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: var(--space-3) var(--space-2);
+      }
+      .section-title {
+        font-size: var(--text-xs);
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        padding: var(--space-3) var(--space-2) var(--space-1);
+      }
+      .channel {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        width: 100%;
+        padding: 6px var(--space-2);
+        border-radius: var(--radius-s);
+        color: var(--text-muted);
+        text-align: left;
+      }
+      .channel:hover {
+        background: var(--bg-hover);
+        color: var(--text);
+      }
+      .channel[aria-current='true'] {
+        background: var(--bg-active);
+        color: var(--text);
+      }
+      .channel.unread {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .channel .badge {
+        margin-left: auto;
+      }
+      .voice-people {
+        list-style: none;
+        margin: 0 0 var(--space-1);
+        padding: 0 0 0 30px;
+      }
+      .voice-people li {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        padding: 3px 0;
+        font-size: var(--text-s);
+        color: var(--text-muted);
+      }
+      .voice-people .avatar {
+        width: 22px;
+        height: 22px;
+        font-size: 10px;
+      }
+      .voice-people .speaking .avatar {
+        box-shadow: 0 0 0 2px var(--success);
+      }
+
+      .voice-panel {
+        margin: 0 var(--space-2);
+        padding: var(--space-2) var(--space-3);
+        border-top: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+      }
+      .voice-panel .state {
+        color: var(--success);
+        font-weight: 700;
+        font-size: var(--text-s);
+      }
+      .voice-panel .where {
+        font-size: var(--text-xs);
+        color: var(--text-muted);
+      }
+      .voice-panel button.info {
+        text-align: left;
+        flex: 1;
+        border-radius: var(--radius-s);
+        padding: 2px var(--space-1);
+      }
+      .voice-panel button.info:hover {
+        background: var(--bg-hover);
+      }
+
+      .user-panel {
+        background: var(--bg-rail);
+        height: 56px;
+        padding: 0 var(--space-2);
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+      }
+      .user-panel .who {
+        flex: 1;
+        min-width: 0;
+        line-height: 1.2;
+      }
+      .user-panel .who strong {
+        display: block;
+        font-size: var(--text-s);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .user-panel .who span {
+        font-size: var(--text-xs);
+        color: var(--text-muted);
+      }
+      .user-panel .avatar .presence {
+        border-color: var(--bg-rail);
+      }
+
+      .main {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+        background: var(--bg-main);
+      }
+      .main-header {
+        height: 52px;
+        padding: 0 var(--space-4);
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        border-bottom: 1px solid var(--border);
+      }
+      .main-header h1 {
+        font-size: var(--text-m);
+        margin: 0;
+      }
+      .main-header .topic {
+        color: var(--text-muted);
+        font-size: var(--text-s);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex: 1;
+      }
+      .messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: var(--space-4) 0;
+      }
+      .msg {
+        display: flex;
+        gap: var(--space-3);
+        padding: 2px var(--space-4);
+      }
+      .msg:hover {
+        background: var(--bg-hover);
+      }
+      .msg.first {
+        margin-top: var(--space-3);
+        padding-top: var(--space-1);
+      }
+      .msg .gutter {
+        width: 40px;
+        flex: none;
+      }
+      .msg .avatar {
+        width: 40px;
+        height: 40px;
+      }
+      .msg .meta {
+        display: flex;
+        gap: var(--space-2);
+        align-items: baseline;
+      }
+      .msg .meta strong {
+        font-weight: 600;
+      }
+      .msg .meta time,
+      .msg .edited {
+        font-size: var(--text-xs);
+        color: var(--text-faint);
+      }
+      .msg p {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+      .msg.unseen {
+        background: var(--unread-tint);
+      }
+      .new-line {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        margin: var(--space-3) var(--space-4);
+        color: var(--danger);
+        font-size: var(--text-xs);
+        font-weight: 700;
+      }
+      .new-line::before,
+      .new-line::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--danger);
+      }
+      .composer {
+        margin: 0 var(--space-4) var(--space-4);
+        display: flex;
+        gap: var(--space-2);
+        align-items: flex-end;
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-m);
+        padding: var(--space-2);
+      }
+      .composer textarea {
+        flex: 1;
+        resize: none;
+        border: 0;
+        background: none;
+        color: var(--text);
+        font: inherit;
+        padding: 6px var(--space-2);
+        max-height: 160px;
+      }
+      .composer textarea:focus-visible {
+        outline: none;
+      }
+      .composer-hint {
+        margin: calc(var(--space-2) * -1) var(--space-4) var(--space-3);
+        font-size: var(--text-xs);
+        color: var(--text-faint);
+      }
+      .notice {
+        margin: var(--space-3) var(--space-4) 0;
+        padding: var(--space-2) var(--space-3);
+        border-radius: var(--radius-s);
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+        font-size: var(--text-s);
+      }
+
+      .members {
+        background: var(--bg-side);
+        overflow-y: auto;
+        padding: var(--space-3) var(--space-2);
+      }
+      .member {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        width: 100%;
+        padding: 6px var(--space-2);
+        border-radius: var(--radius-s);
+        text-align: left;
+      }
+      .member:hover {
+        background: var(--bg-hover);
+      }
+      .member.offline {
+        opacity: 0.5;
+      }
+
+      /* ---- Popovers, menus, dialogs -------------------------------------- */
+      .popover {
+        position: fixed;
+        z-index: 20;
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-m);
+        box-shadow: var(--shadow);
+        min-width: 220px;
+        padding: var(--space-2);
+      }
+      .popover[hidden] {
+        display: none;
+      }
+      .menu button {
+        display: flex;
+        width: 100%;
+        gap: var(--space-2);
+        align-items: center;
+        padding: var(--space-2) var(--space-3);
+        border-radius: var(--radius-s);
+        text-align: left;
+      }
+      .menu button:hover {
+        background: var(--accent);
+        color: var(--accent-text);
+      }
+      .menu button.danger {
+        color: var(--danger);
+      }
+      .menu button.danger:hover {
+        background: var(--danger);
+        color: #fff;
+      }
+      .menu hr {
+        border: 0;
+        border-top: 1px solid var(--border);
+        margin: var(--space-1) 0;
+      }
+      .card-head {
+        display: flex;
+        gap: var(--space-3);
+        align-items: center;
+        padding: var(--space-2);
+      }
+      .card-head .avatar {
+        width: 48px;
+        height: 48px;
+        font-size: var(--text-l);
+      }
+
+      .bubble {
+        position: fixed;
+        z-index: 25;
+        padding: var(--space-3);
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-m);
+        box-shadow: var(--shadow);
+        font-size: var(--text-s);
+        opacity: 0;
+        transform: translateY(4px);
+        transition:
+          opacity 0.12s,
+          transform 0.12s;
+        pointer-events: none;
+      }
+      .bubble.shown {
+        opacity: 1;
+        transform: none;
+      }
+      .bubble::after {
+        content: '';
+        position: absolute;
+        left: var(--arrow, 28px);
+        bottom: -6px;
+        width: 10px;
+        height: 10px;
+        background: var(--bg-raised);
+        border-right: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+        transform: rotate(45deg);
+      }
+      .bubble .quality {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        font-weight: 700;
+        color: var(--success);
+        margin-bottom: var(--space-2);
+      }
+      .bubble .bars {
+        display: inline-flex;
+        gap: 2px;
+        align-items: flex-end;
+      }
+      .bubble .bars i {
+        width: 4px;
+        background: currentColor;
+        border-radius: 1px;
+      }
+      .bubble dl {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 2px var(--space-3);
+        margin: 0;
+      }
+      .bubble dt {
+        color: var(--text-muted);
+      }
+      .bubble dd {
+        margin: 0;
+        text-align: right;
+      }
+      .bubble .verify {
+        margin-top: var(--space-2);
+        padding-top: var(--space-2);
+        border-top: 1px solid var(--border);
+        color: var(--text-muted);
+      }
+      .bubble .verify strong {
+        display: block;
+        color: var(--text);
+        font-family: ui-monospace, Consolas, monospace;
+        letter-spacing: 0.06em;
+      }
+
+      dialog {
+        border: 0;
+        padding: 0;
+        width: min(920px, 94vw);
+        height: min(640px, 90vh);
+        border-radius: var(--radius-l);
+        background: var(--bg-main);
+        color: var(--text);
+        box-shadow: var(--shadow);
+      }
+      dialog::backdrop {
+        background: rgba(0, 0, 0, 0.6);
+      }
+      dialog.small {
+        width: min(440px, 94vw);
+        height: auto;
+      }
+      .settings {
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        height: 100%;
+      }
+      .settings nav {
+        background: var(--bg-side);
+        padding: var(--space-5) var(--space-2);
+      }
+      .settings nav button {
+        display: block;
+        width: 100%;
+        text-align: left;
+        padding: 6px var(--space-3);
+        border-radius: var(--radius-s);
+        color: var(--text-muted);
+      }
+      .settings nav button:hover {
+        background: var(--bg-hover);
+        color: var(--text);
+      }
+      .settings nav button[aria-current='true'] {
+        background: var(--bg-active);
+        color: var(--text);
+      }
+      .settings section {
+        padding: var(--space-6);
+        overflow-y: auto;
+        position: relative;
+      }
+      .settings h2 {
+        margin: 0 0 var(--space-4);
+        font-size: var(--text-xl);
+      }
+      .close {
+        position: absolute;
+        top: var(--space-4);
+        right: var(--space-4);
+      }
+      .field {
+        display: grid;
+        gap: var(--space-1);
+        margin-bottom: var(--space-4);
+        max-width: 420px;
+      }
+      .field label {
+        font-size: var(--text-xs);
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted);
+      }
+      .field input,
+      .field select {
+        font: inherit;
+        color: var(--text);
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-s);
+        padding: var(--space-2) var(--space-3);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+        padding: var(--space-3) 0;
+        border-bottom: 1px solid var(--border);
+        max-width: 560px;
+      }
+      .meter {
+        height: 8px;
+        border-radius: 4px;
+        background: var(--bg-hover);
+        overflow: hidden;
+        max-width: 420px;
+      }
+      .meter span {
+        display: block;
+        height: 100%;
+        width: 45%;
+        background: var(--success);
+        animation: level 1.4s ease-in-out infinite alternate;
+      }
+      @keyframes level {
+        from {
+          width: 12%;
+        }
+        to {
+          width: 68%;
+        }
+      }
+      .code {
+        font: 700 var(--text-xl) / 1.2 ui-monospace, Consolas, monospace;
+        letter-spacing: 0.08em;
+      }
+      .rail .theme {
+        margin-top: auto;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        color: var(--text-muted);
+        font-size: var(--text-xs);
+      }
+      .rail .theme:hover {
+        background: var(--bg-hover);
+        color: var(--text);
+      }
+
+      .only-narrow {
+        display: none !important;
+      }
+
+      /* ---- Narrow windows ------------------------------------------------- */
+      @media (max-width: 1000px) {
+        .app,
+        .app.no-members {
+          grid-template-columns: 72px 220px 1fr;
+        }
+        .members {
+          display: none;
+        }
+        .app.show-members .members {
+          display: block;
+          position: fixed;
+          right: 0;
+          top: 52px;
+          bottom: 0;
+          width: 248px;
+          box-shadow: var(--shadow);
+          z-index: 10;
+        }
+      }
+      @media (max-width: 700px) {
+        .app,
+        .app.no-members {
+          grid-template-columns: 64px 1fr;
+        }
+        .sidebar {
+          display: none;
+        }
+        .app.show-side .sidebar {
+          display: flex;
+          position: fixed;
+          left: 64px;
+          top: 0;
+          bottom: 0;
+          width: 248px;
+          z-index: 10;
+          box-shadow: var(--shadow);
+        }
+        .only-narrow {
+          display: inline-grid !important;
+        }
+        .settings {
+          grid-template-columns: 1fr;
+        }
+        .settings nav {
+          display: flex;
+          overflow-x: auto;
+          padding: var(--space-2);
+        }
+        .settings nav button {
+          white-space: nowrap;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app" id="app">
+      <nav class="rail" aria-label="Communities" id="rail"></nav>
+      <aside class="sidebar" id="sidebar"></aside>
+      <main class="main" id="main"></main>
+      <aside class="members" id="members" aria-label="Members"></aside>
+    </div>
+
+    <div class="popover menu" id="community-menu" hidden role="menu"></div>
+    <div class="popover" id="member-card" hidden></div>
+
+    <dialog id="community-settings" aria-label="Community settings"></dialog>
+    <dialog id="user-settings" aria-label="Settings"></dialog>
+    <div class="bubble" id="call-bubble" role="tooltip"></div>
+
+
+    <script>
+      // ---- Icons ------------------------------------------------------------
+      const icon = {
+        home: '<svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
+        plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+        hash: '<svg viewBox="0 0 24 24"><path d="M5 9h14M4 15h14M10 3L8 21M16 3l-2 18"/></svg>',
+        speaker: '<svg viewBox="0 0 24 24"><path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/></svg>',
+        mic: '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>',
+        micOff: '<svg viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M9 9v2a3 3 0 005 2.2M15 9.3V6a3 3 0 00-5.9-.7"/><path d="M5 11a7 7 0 0011.5 5.3M19 11a7 7 0 01-.6 2.8M12 18v3"/></svg>',
+        headphones: '<svg viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0118 0v6"/><rect x="3" y="14" width="4" height="7" rx="1"/><rect x="17" y="14" width="4" height="7" rx="1"/></svg>',
+        headphonesOff: '<svg viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M3 18v-6a9 9 0 0115-6.7M21 12v6"/><rect x="3" y="14" width="4" height="7" rx="1"/></svg>',
+        gear: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>',
+        leave: '<svg viewBox="0 0 24 24"><path d="M16 17l5-5-5-5M21 12H9M13 21H5a2 2 0 01-2-2V5a2 2 0 012-2h8"/></svg>',
+        people: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0114 0M16 4a4 4 0 010 8M22 21a7 7 0 00-5-6.7"/></svg>',
+        lock: '<svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>',
+        chevron: '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
+        menu: '<svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>',
+        close: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+        theme: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 000 18z" fill="currentColor"/></svg>',
+        chat: '<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 01-11.6 7.1L3 21l1.9-6.4A8 8 0 1121 12z"/></svg>',
+      }
+
+      // ---- Sample data ------------------------------------------------------
+      const me = { id: 'u1', name: 'Burak Uğraş', username: 'burak', color: '#6d78ff' }
+      const people = {
+        u1: me,
+        u2: { id: 'u2', name: 'Ayşe', username: 'ayse', color: '#e0679a' },
+        u3: { id: 'u3', name: 'Cem', username: 'cem', color: '#2fa88a' },
+        u4: { id: 'u4', name: 'Deniz', username: 'deniz', color: '#e08a3c' },
+        u5: { id: 'u5', name: 'Eda', username: 'eda', color: '#8f6be8' },
+      }
+      const communities = [
+        {
+          id: 'ekip', name: 'Ekip', short: 'EK', unread: 3,
+          roles: { u1: 'owner', u2: 'moderator', u3: 'member', u4: 'member' },
+          online: ['u1', 'u2', 'u3'],
+          text: [
+            { id: 'general', name: 'general', topic: 'Everything about the team', unread: 0 },
+            { id: 'news', name: 'announcements', topic: 'Only important news', unread: 3 },
+          ],
+          voice: [
+            { id: 'v1', name: 'General', people: ['u2'] },
+            { id: 'v2', name: 'Gaming', people: [] },
+          ],
+        },
+        {
+          id: 'oyun', name: 'Oyun Gecesi', short: 'OG', unread: 0,
+          roles: { u1: 'member', u4: 'owner', u5: 'member' },
+          online: ['u1', 'u5'],
+          text: [{ id: 'chat', name: 'chat', topic: 'Who plays tonight?', unread: 0 }],
+          voice: [{ id: 'v3', name: 'Lobby', people: ['u5'] }],
+        },
+      ]
+      const conversations = [
+        { id: 'd1', title: 'Ayşe', person: 'u2', unread: 2 },
+        { id: 'd2', title: 'Cem', person: 'u3', unread: 0 },
+        { id: 'g1', title: 'Weekend plan', group: ['u2', 'u3', 'u4'], unread: 0 },
+      ]
+      const sampleMessages = [
+        { who: 'u2', at: '20:14', text: 'Is everyone joining tonight?' },
+        { who: 'u2', at: '20:14', text: 'I set up the voice channel.' },
+        { who: 'u1', at: '20:16', text: 'Yes, after dinner. Around 21:00.', edited: true },
+        { who: 'u3', at: '20:31', text: 'Count me in 🎮', unseen: true, newLine: true },
+        { who: 'u3', at: '20:31', text: 'Can someone send the invite to Deniz?', unseen: true },
+      ]
+
+      // ---- State ------------------------------------------------------------
+      const state = {
+        view: 'community', // 'community' | 'home'
+        community: communities[0],
+        channel: communities[0].text[0],
+        conversation: null,
+        homeTab: 'friends',
+        inCall: null, // { community, channel }
+        muted: false,
+        deafened: false,
+        theme: 'system',
+      }
+
+      const $ = (id) => document.getElementById(id)
+      const avatar = (p, presence) =>
+        `<span class="avatar" style="background:${p.color}">${p.name[0]}${
+          presence === undefined ? '' : `<span class="presence ${presence ? 'on' : ''}"></span>`
+        }</span>`
+
+      // ---- Rail -------------------------------------------------------------
+      function renderRail() {
+        const homeUnread = conversations.reduce((n, c) => n + c.unread, 0)
+        $('rail').innerHTML = `
+          <button class="rail-item" aria-label="Home: friends and messages" aria-current="${state.view === 'home'}" data-home>
+            ${icon.home}${homeUnread ? `<span class="badge">${homeUnread}</span>` : ''}
+          </button>
+          <span class="rail-divider"></span>
+          ${communities
+            .map(
+              (c) => `<button class="rail-item" aria-label="${c.name}" title="${c.name}"
+                aria-current="${state.view === 'community' && state.community === c}" data-community="${c.id}">
+                ${c.short}${c.unread ? `<span class="badge">${c.unread}</span>` : ''}
+              </button>`,
+            )
+            .join('')}
+          <button class="rail-item add" aria-label="Create or join a community" title="Create or join a community">${icon.plus}</button>
+          <button class="theme" id="theme-quick" title="Prototype only: switch the theme">${icon.theme}</button>`
+        // Flips what is on screen (Settings > Appearance also offers "follow the system").
+        $('theme-quick').onclick = () =>
+          setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')
+        $('rail').querySelector('[data-home]').onclick = () => {
+          state.view = 'home'
+          render()
+        }
+        $('rail').querySelectorAll('[data-community]').forEach((b) => {
+          b.onclick = () => {
+            state.view = 'community'
+            state.community = communities.find((c) => c.id === b.dataset.community)
+            state.channel = state.community.text[0]
+            render()
+          }
+        })
+      }
+
+      // ---- Sidebar ----------------------------------------------------------
+      function renderSidebar() {
+        const side = $('sidebar')
+        let list
+        if (state.view === 'home') {
+          list = `
+            <div class="side-header">Home</div>
+            <div class="side-list">
+              <button class="channel" aria-current="${state.homeTab === 'friends'}" data-friends>${icon.people} Friends</button>
+              <div class="section-title">Direct messages</div>
+              ${conversations
+                .map(
+                  (c) => `<button class="channel ${c.unread ? 'unread' : ''}" aria-current="${state.homeTab === c.id}" data-conv="${c.id}">
+                    ${c.person ? avatar(people[c.person], ['u2', 'u3'].includes(c.person)) : `<span class="avatar" style="background:#4b5563">${c.group.length}</span>`}
+                    ${c.title}${c.unread ? `<span class="badge">${c.unread}</span>` : ''}
+                  </button>`,
+                )
+                .join('')}
+            </div>`
+        } else {
+          const c = state.community
+          list = `
+            <button class="side-header" id="community-name" aria-haspopup="menu">${c.name} ${icon.chevron}</button>
+            <div class="side-list">
+              <div class="section-title">Text channels</div>
+              ${c.text
+                .map(
+                  (t) => `<button class="channel ${t.unread ? 'unread' : ''}" aria-current="${state.channel === t}" data-text="${t.id}">
+                    ${icon.hash} ${t.name}${t.unread ? `<span class="badge">${t.unread}</span>` : ''}
+                  </button>`,
+                )
+                .join('')}
+              <div class="section-title">Voice channels</div>
+              ${c.voice
+                .map(
+                  (v) => `<button class="channel" data-voice="${v.id}" title="Join ${v.name}">${icon.speaker} ${v.name}</button>
+                  ${
+                    v.people.length
+                      ? `<ul class="voice-people">${v.people
+                          .map(
+                            (id, i) =>
+                              `<li class="${i === 0 && id !== 'u1' ? 'speaking' : ''}">${avatar(people[id])} ${people[id].name}${
+                                id === 'u1' && state.muted ? ' ' + icon.micOff : ''
+                              }</li>`,
+                          )
+                          .join('')}</ul>`
+                      : ''
+                  }`,
+                )
+                .join('')}
+            </div>`
+        }
+        const call = state.inCall
+          ? `<div class="voice-panel">
+              <button class="info" id="call-info" aria-describedby="call-bubble">
+                <div class="state">${icon.lock} Voice connected</div>
+                <div class="where">${state.inCall.channel.name} / ${state.inCall.community.name}</div>
+              </button>
+              <button class="icon-btn" id="leave-call" aria-label="Leave call" title="Leave call">${icon.leave}</button>
+            </div>`
+          : ''
+        side.innerHTML = `${list}${call}
+          <div class="user-panel">
+            ${avatar(me, true)}
+            <div class="who"><strong>${me.name}</strong><span>@${me.username}</span></div>
+            <button class="icon-btn ${state.muted ? 'off' : ''}" id="mute" aria-pressed="${state.muted}" aria-label="${state.muted ? 'Unmute' : 'Mute'}" title="${state.muted ? 'Unmute' : 'Mute'}">${state.muted ? icon.micOff : icon.mic}</button>
+            <button class="icon-btn ${state.deafened ? 'off' : ''}" id="deafen" aria-pressed="${state.deafened}" aria-label="${state.deafened ? 'Undeafen' : 'Deafen'}" title="${state.deafened ? 'Undeafen' : 'Deafen: hear nothing'}">${state.deafened ? icon.headphonesOff : icon.headphones}</button>
+            <button class="icon-btn" id="open-settings" aria-label="Settings" title="Settings">${icon.gear}</button>
+          </div>`
+
+        side.querySelectorAll('[data-text]').forEach((b) => {
+          b.onclick = () => {
+            state.channel = state.community.text.find((t) => t.id === b.dataset.text)
+            state.channel.unread = 0
+            state.community.unread = state.community.text.reduce((n, t) => n + t.unread, 0)
+            render()
+          }
+        })
+        side.querySelectorAll('[data-voice]').forEach((b) => {
+          b.onclick = () => {
+            if (state.inCall) state.inCall.channel.people = state.inCall.channel.people.filter((p) => p !== 'u1')
+            const channel = state.community.voice.find((v) => v.id === b.dataset.voice)
+            channel.people = [...channel.people.filter((p) => p !== 'u1'), 'u1']
+            state.inCall = { community: state.community, channel }
+            render()
+          }
+        })
+        side.querySelector('[data-friends]')?.addEventListener('click', () => {
+          state.homeTab = 'friends'
+          render()
+        })
+        side.querySelectorAll('[data-conv]').forEach((b) => {
+          b.onclick = () => {
+            state.homeTab = b.dataset.conv
+            conversations.find((c) => c.id === b.dataset.conv).unread = 0
+            render()
+          }
+        })
+        $('community-name')?.addEventListener('click', (e) => openCommunityMenu(e.currentTarget))
+        const info = $('call-info')
+        if (info) {
+          info.addEventListener('mouseenter', () => showCallBubble(info))
+          info.addEventListener('focus', () => showCallBubble(info))
+          info.addEventListener('mouseleave', () => hideCallBubble())
+          info.addEventListener('blur', () => hideCallBubble())
+          // A click keeps it open for a few seconds (touch screens have no hover).
+          info.addEventListener('click', () => showCallBubble(info, 4000))
+        }
+        $('leave-call')?.addEventListener('click', () => {
+          hideCallBubble(true)
+          state.inCall.channel.people = state.inCall.channel.people.filter((p) => p !== 'u1')
+          state.inCall = null
+          render()
+        })
+        $('mute').onclick = () => {
+          state.muted = !state.muted
+          if (!state.muted) state.deafened = false
+          render()
+        }
+        $('deafen').onclick = () => {
+          state.deafened = !state.deafened
+          state.muted = state.deafened || state.muted
+          render()
+        }
+        $('open-settings').onclick = () => openUserSettings('voice')
+      }
+
+      // ---- Main ------------------------------------------------------------
+      function messagesHtml(list) {
+        return list
+          .map((m, i) => {
+            const prev = list[i - 1]
+            const first = !prev || prev.who !== m.who || m.newLine
+            const p = people[m.who]
+            return `${m.newLine ? '<div class="new-line" role="separator">New</div>' : ''}
+              <div class="msg ${first ? 'first' : ''} ${m.unseen ? 'unseen' : ''}">
+                <div class="gutter">${first ? avatar(p) : ''}</div>
+                <div>
+                  ${first ? `<div class="meta"><strong>${p.name}</strong><time>Today ${m.at}</time></div>` : ''}
+                  <p>${m.text} ${m.edited ? '<span class="edited">(edited)</span>' : ''}</p>
+                </div>
+              </div>`
+          })
+          .join('')
+      }
+
+      function composer(label) {
+        return `<form class="composer" onsubmit="return false">
+            <textarea rows="1" aria-label="Message ${label}" placeholder="Message ${label}"></textarea>
+            <button class="btn" type="submit">Send</button>
+          </form>
+          <div class="composer-hint">Enter to send, Shift+Enter for a new line</div>`
+      }
+
+      function renderMain() {
+        const main = $('main')
+        const narrow = `<button class="icon-btn only-narrow" id="toggle-side" aria-label="Channels">${icon.menu}</button>`
+        if (state.view === 'home' && state.homeTab === 'friends') {
+          main.innerHTML = `
+            <header class="main-header">${narrow}${icon.people}<h1>Friends</h1>
+              <span class="topic"></span>
+              <button class="btn">Add friend</button>
+            </header>
+            <div class="messages" style="padding:var(--space-4)">
+              <div class="section-title">Requests to you — 1</div>
+              <div class="row"><span style="display:flex;gap:8px;align-items:center">${avatar(people.u5, true)} Eda <span class="muted">@eda</span></span>
+                <span><button class="btn">Accept</button> <button class="btn secondary">Decline</button></span></div>
+              <div class="section-title" style="margin-top:16px">Friends — 3</div>
+              ${['u2', 'u3', 'u4']
+                .map(
+                  (id) => `<div class="row"><span style="display:flex;gap:8px;align-items:center">${avatar(people[id], id !== 'u4')} ${people[id].name} <span class="muted">@${people[id].username}</span></span>
+                    <span><button class="icon-btn" aria-label="Message" title="Message">${icon.chat}</button></span></div>`,
+                )
+                .join('')}
+            </div>`
+        } else if (state.view === 'home') {
+          const c = conversations.find((x) => x.id === state.homeTab)
+          main.innerHTML = `
+            <header class="main-header">${narrow}${c.person ? avatar(people[c.person]) : icon.people}<h1>${c.title}</h1>
+              <span class="topic">${c.group ? c.group.map((id) => people[id].name).join(', ') : '@' + people[c.person].username}</span>
+            </header>
+            <div class="notice">Messages here are not end-to-end encrypted yet: the Nosilence server can read them.</div>
+            <div class="messages">${messagesHtml(sampleMessages.slice(0, 3))}</div>
+            ${composer(c.title)}`
+        } else {
+          const ch = state.channel
+          main.innerHTML = `
+            <header class="main-header">${narrow}${icon.hash}<h1>${ch.name}</h1>
+              <span class="topic">${ch.topic}</span>
+              <button class="icon-btn" id="toggle-members" aria-label="Members" title="Show or hide members">${icon.people}</button>
+            </header>
+            <div class="messages">${messagesHtml(sampleMessages)}</div>
+            ${composer('#' + ch.name)}`
+        }
+        $('toggle-members')?.addEventListener('click', () => {
+          const app = $('app')
+          if (window.matchMedia('(max-width: 1000px)').matches) app.classList.toggle('show-members')
+          else app.classList.toggle('no-members')
+        })
+        $('toggle-side')?.addEventListener('click', () => $('app').classList.toggle('show-side'))
+        main.querySelector('textarea')?.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault()
+            e.target.value = ''
+          }
+        })
+      }
+
+      // ---- Members ----------------------------------------------------------
+      function renderMembers() {
+        const m = $('members')
+        if (state.view === 'home') {
+          $('app').classList.add('no-members')
+          m.innerHTML = ''
+          return
+        }
+        $('app').classList.remove('no-members')
+        const c = state.community
+        const ids = Object.keys(c.roles)
+        const online = ids.filter((id) => c.online.includes(id))
+        const offline = ids.filter((id) => !c.online.includes(id))
+        const row = (id, on) => {
+          const role = c.roles[id]
+          return `<button class="member ${on ? '' : 'offline'}" data-member="${id}">
+              ${avatar(people[id], on)} <span>${people[id].name}</span>
+              ${role !== 'member' ? `<span class="role">${role}</span>` : ''}
+            </button>`
+        }
+        m.innerHTML = `
+          <div class="section-title">Online — ${online.length}</div>
+          ${online.map((id) => row(id, true)).join('')}
+          <div class="section-title">Offline — ${offline.length}</div>
+          ${offline.map((id) => row(id, false)).join('')}`
+        m.querySelectorAll('[data-member]').forEach((b) => {
+          b.onclick = () => openMemberCard(b, b.dataset.member)
+        })
+      }
+
+      // ---- Popovers ---------------------------------------------------------
+      function place(pop, anchor, side) {
+        const r = anchor.getBoundingClientRect()
+        pop.hidden = false
+        const w = pop.offsetWidth
+        const h = pop.offsetHeight
+        let left = side === 'left' ? r.left - w - 8 : r.left
+        let top = side === 'left' ? r.top : r.bottom + 6
+        left = Math.max(8, Math.min(left, innerWidth - w - 8))
+        top = Math.max(8, Math.min(top, innerHeight - h - 8))
+        pop.style.left = `${left}px`
+        pop.style.top = `${top}px`
+      }
+
+      function openCommunityMenu(anchor) {
+        const owner = state.community.roles.u1 === 'owner'
+        const menu = $('community-menu')
+        menu.innerHTML = `
+          <button role="menuitem">${icon.people} Invite people</button>
+          ${owner || state.community.roles.u1 === 'moderator' ? `<button role="menuitem" data-open-settings>${icon.gear} Community settings</button>` : ''}
+          <hr />
+          <button role="menuitem" class="danger">${icon.leave} ${owner ? 'Delete community' : 'Leave community'}</button>`
+        menu.querySelector('[data-open-settings]')?.addEventListener('click', () => {
+          menu.hidden = true
+          openCommunitySettings('overview')
+        })
+        place(menu, anchor)
+      }
+
+      function openMemberCard(anchor, id) {
+        const p = people[id]
+        const myRole = state.community.roles.u1
+        const role = state.community.roles[id]
+        const card = $('member-card')
+        card.innerHTML = `
+          <div class="card-head">${avatar(p, state.community.online.includes(id))}
+            <div><strong>${p.name}</strong><div class="muted">@${p.username}</div>
+            ${role !== 'member' ? `<span class="role">${role}</span>` : ''}</div>
+          </div>
+          ${
+            id === 'u1'
+              ? '<div class="menu"><button data-me>' + icon.gear + ' Edit profile</button></div>'
+              : `<div class="menu">
+                  <button>${icon.chat} Message</button>
+                  <button>${icon.plus} Add friend</button>
+                  ${myRole === 'owner' ? `<hr /><button>${role === 'moderator' ? 'Remove moderator' : 'Make moderator'}</button>` : ''}
+                  ${myRole === 'owner' || (myRole === 'moderator' && role === 'member') ? `<button class="danger">Remove from community</button>` : ''}
+                  <hr /><button class="danger">Block</button>
+                </div>`
+          }`
+        card.querySelector('[data-me]')?.addEventListener('click', () => {
+          card.hidden = true
+          openUserSettings('privacy')
+        })
+        place(card, anchor, 'left')
+      }
+
+      document.addEventListener('click', (e) => {
+        for (const id of ['community-menu', 'member-card']) {
+          const pop = $(id)
+          if (!pop.hidden && !pop.contains(e.target) && !e.target.closest('#community-name, [data-member]'))
+            pop.hidden = true
+        }
+      })
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          $('community-menu').hidden = true
+          $('member-card').hidden = true
+        }
+      })
+
+      // ---- Dialogs ----------------------------------------------------------
+      function settingsDialog(dialog, title, tabs, active, body) {
+        dialog.innerHTML = `
+          <div class="settings">
+            <nav aria-label="${title}">
+              <div class="section-title">${title}</div>
+              ${tabs.map(([id, label]) => `<button data-tab="${id}" aria-current="${id === active}">${label}</button>`).join('')}
+            </nav>
+            <section>
+              <button class="icon-btn close" aria-label="Close" data-close>${icon.close}</button>
+              ${body(active)}
+            </section>
+          </div>`
+        dialog.querySelectorAll('[data-tab]').forEach((b) => {
+          b.onclick = () => settingsDialog(dialog, title, tabs, b.dataset.tab, body)
+        })
+        dialog.querySelector('[data-close]').onclick = () => dialog.close()
+        if (!dialog.open) dialog.showModal()
+      }
+
+      function openCommunitySettings(tab) {
+        const c = state.community
+        settingsDialog(
+          $('community-settings'),
+          c.name,
+          [
+            ['overview', 'Overview'],
+            ['channels', 'Channels'],
+            ['members', 'Members and roles'],
+            ['invites', 'Invites'],
+            ['ownership', 'Ownership'],
+          ],
+          tab,
+          (t) =>
+            ({
+              overview: `<h2>Overview</h2>
+                <div class="field"><label>Community name</label><input value="${c.name}" /></div>
+                <button class="btn">Save</button>`,
+              channels: `<h2>Channels</h2>
+                ${[...c.text.map((x) => ['#', x.name]), ...c.voice.map((x) => ['🔊', x.name])]
+                  .map(([k, n]) => `<div class="row"><span>${k} ${n}</span><span><button class="btn secondary">↑</button> <button class="btn secondary">↓</button> <button class="btn secondary">Rename</button> <button class="btn quiet-danger">Delete</button></span></div>`)
+                  .join('')}
+                <p><button class="btn">Create channel</button></p>`,
+              members: `<h2>Members and roles</h2>
+                ${Object.entries(c.roles)
+                  .map(([id, r]) => `<div class="row"><span style="display:flex;gap:8px;align-items:center">${avatar(people[id])} ${people[id].name} ${r !== 'member' ? `<span class="role">${r}</span>` : ''}</span>
+                    ${id === 'u1' ? '' : `<span><button class="btn secondary">${r === 'moderator' ? 'Remove moderator' : 'Make moderator'}</button> <button class="btn quiet-danger">Remove</button></span>`}</div>`)
+                  .join('')}`,
+              invites: `<h2>Invites</h2>
+                <div class="field"><label>Expires after</label><select><option>1 day</option><option>7 days</option></select></div>
+                <div class="field"><label>Uses</label><select><option>Unlimited</option><option>1</option><option>10</option></select></div>
+                <button class="btn">Create invite link</button>
+                <h3 style="margin-top:24px">Active invites</h3>
+                <div class="row"><span>Expires in 6 days · 2 of 10 used</span><button class="btn secondary">Revoke</button></div>`,
+              ownership: `<h2>Ownership</h2>
+                <p class="muted">Offer the community to up to three members, in order. Each has 72 hours to accept.</p>
+                <div class="field"><label>First choice</label><select><option>Ayşe</option><option>Cem</option></select></div>
+                <button class="btn">Offer ownership</button>
+                <h3 style="margin-top:24px;color:var(--danger)">Danger zone</h3>
+                <button class="btn danger">Delete community</button>`,
+            })[t],
+        )
+      }
+
+      function openUserSettings(tab) {
+        settingsDialog(
+          $('user-settings'),
+          'Settings',
+          [
+            ['voice', 'Voice'],
+            ['notifications', 'Notifications'],
+            ['privacy', 'Username and privacy'],
+            ['appearance', 'Appearance'],
+            ['account', 'Account'],
+          ],
+          tab,
+          (t) =>
+            ({
+              voice: `<h2>Voice</h2>
+                <div class="field"><label>Microphone</label><select><option>System default</option><option>USB headset</option></select></div>
+                <div class="field"><label>Input level</label><div class="meter"><span></span></div></div>
+                <div class="field"><label>Speaker</label><select><option>System default</option><option>Speakers</option></select></div>
+                <div class="field"><label>How you talk</label><select><option>When I speak (voice activity)</option><option>Push to talk: Ctrl + Shift</option></select></div>`,
+              notifications: `<h2>Notifications</h2>
+                <div class="row"><span>Notify me of new messages while Nosilence is in the background</span><input type="checkbox" checked /></div>
+                <div class="row"><span>Show the message text</span><input type="checkbox" /></div>`,
+              privacy: `<h2>Username and privacy</h2>
+                <div class="field"><label>Username</label><input value="${me.username}" /></div>
+                <div class="field"><label>Who can send you friend requests</label><select><option>Everyone</option><option>Only people in my communities</option></select></div>
+                <div class="row"><span>People in my communities can message me</span><input type="checkbox" checked /></div>`,
+              appearance: `<h2>Appearance</h2>
+                <div class="field"><label>Theme</label>
+                  <select id="theme-select">
+                    <option value="system" ${state.theme === 'system' ? 'selected' : ''}>Follow the system</option>
+                    <option value="dark" ${state.theme === 'dark' ? 'selected' : ''}>Dark</option>
+                    <option value="light" ${state.theme === 'light' ? 'selected' : ''}>Light</option>
+                  </select></div>`,
+              account: `<h2>Account</h2>
+                <div class="row"><span>${me.name}<br /><span class="muted">burak@example.com</span></span><button class="btn secondary">Download my data</button></div>
+                <p><button class="btn secondary">Sign out</button></p>
+                <h3 style="color:var(--danger)">Danger zone</h3>
+                <button class="btn danger">Delete account</button>`,
+            })[t],
+        )
+        $('theme-select')?.addEventListener('change', (e) => setTheme(e.target.value))
+      }
+
+      // A short-lived bubble above "Voice connected": how the connection is doing.
+      let bubbleTimer
+      function showCallBubble(anchor, keepFor) {
+        const b = $('call-bubble')
+        const ping = 30 + Math.round(Math.random() * 25)
+        const loss = (Math.random() * 0.6).toFixed(1)
+        b.innerHTML = `
+          <div class="quality"><span class="bars"><i style="height:6px"></i><i style="height:10px"></i><i style="height:14px"></i></span> Good connection</div>
+          <dl>
+            <dt>Encryption</dt><dd>${icon.lock} End to end</dd>
+            <dt>Round trip</dt><dd>${ping} ms</dd>
+            <dt>Packets lost</dt><dd>${loss} %</dd>
+            <dt>In the call</dt><dd>${state.inCall.channel.people.length}</dd>
+          </dl>
+          <div class="verify">Verification code (the same for everyone in the call)
+            <strong>4821 0937 5512</strong></div>`
+        // Within the channel column, its arrow pointing at "Voice connected".
+        const column = $('sidebar').getBoundingClientRect()
+        const r = anchor.getBoundingClientRect()
+        b.style.left = `${column.left + 8}px`
+        b.style.width = `${column.width - 16}px`
+        b.style.setProperty('--arrow', `${r.left - column.left + 12}px`)
+        b.style.top = `${r.top - b.offsetHeight - 10}px`
+        b.classList.add('shown')
+        clearTimeout(bubbleTimer)
+        if (keepFor) bubbleTimer = setTimeout(hideCallBubble, keepFor, true)
+      }
+      function hideCallBubble(force) {
+        if (!force && bubbleTimer) return
+        bubbleTimer = undefined
+        $('call-bubble').classList.remove('shown')
+      }
+
+      // ---- Theme ------------------------------------------------------------
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)')
+      function setTheme(value) {
+        state.theme = value
+        const dark = value === 'dark' || (value === 'system' && systemDark.matches)
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+        $('theme-quick')?.setAttribute('title', `Prototype only: switch to the ${dark ? 'light' : 'dark'} theme`)
+      }
+      systemDark.addEventListener('change', () => state.theme === 'system' && setTheme('system'))
+
+      function render() {
+        renderRail()
+        renderSidebar()
+        renderMain()
+        renderMembers()
+      }
+      render()
+      setTheme('system')
+    </script>
+  </body>
+</html>

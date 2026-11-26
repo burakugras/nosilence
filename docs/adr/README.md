@@ -38,3 +38,4 @@ What becomes easier, what becomes harder, what we must do next.
 | [0013](0013-voice-quality-and-control.md) | Loss protection, faster reconnects, devices and push-to-talk |
 | [0014](0014-desktop-maturity.md) | Google sign-up in the desktop app, signed updates, notifications |
 | [0015](0015-friends-and-conversations.md) | Usernames, friends, blocking and direct and group conversations |
+| [0016](0016-layout.md) | Layout, design tokens and themes |

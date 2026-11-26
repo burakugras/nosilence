@@ -2,13 +2,8 @@
 import {
   LiveKitRoom,
   RoomAudioRenderer,
-  TrackToggle,
-  useRoomContext,
   useConnectionState,
-  useIsSpeaking,
-  useLocalParticipant,
-  useParticipants,
-  useRemoteParticipants,
+  useRoomContext,
 } from '@livekit/components-react'
 import {
   ConnectionState,
@@ -20,27 +15,24 @@ import {
   RoomEvent,
   Track,
   type Participant,
-  type RemoteParticipant,
 } from 'livekit-client'
 import { useEffect, useRef, useState } from 'react'
 import type { VoiceJoin } from '../api/voice'
 import { MlsKeyProvider } from '../e2ee/keyProvider'
 import { loadMls } from '../e2ee/mls'
-import { VoiceSession, type E2eeStatus } from '../e2ee/session'
+import { VoiceSession } from '../e2ee/session'
 import { openVoiceTopic } from '../gateway/phoenixGateway'
-import { beforeQuit } from '../platform'
 import type { OpenVoiceTopic } from '../gateway/types'
+import { beforeQuit } from '../platform'
 import { CallQuality, sendCallReport } from './callReport'
+import { reportCall, resetCallState, useControls, type CallStatus } from './callState'
 import { watchPushToTalk } from './pushToTalk'
-import { CAPTURE, formatKeys, getVoiceSettings, useVoiceSettings } from './settings'
-import { summariseInbound, type InboundAudioSample, type InboundAudioSummary } from './stats'
-import { VoiceSettingsPanel } from './VoiceSettingsPanel'
+import { CAPTURE, getVoiceSettings, useVoiceSettings } from './settings'
+import { summariseInbound, type InboundAudioSample } from './stats'
 
 type Props = {
   join: VoiceJoin
   channelId: string
-  /** Shown as the heading, e.g. "Community · Channel". */
-  title: string
   /** Connected to the room (used to show the user in the channel for others). */
   onConnected?: () => void
   /** When the user pressed Join (performance.now()), to measure the join time. */
@@ -48,8 +40,6 @@ type Props = {
   onLeave: () => void
   openTopic?: OpenVoiceTopic
 }
-
-type Status = E2eeStatus | { state: 'ended'; reason: 'unsupported' }
 
 /** A LiveKit room whose media keys come only from our MLS group (ADR 0007). */
 function createRoom() {
@@ -67,21 +57,31 @@ function createRoom() {
   return { room, keyProvider }
 }
 
+/**
+ * The call itself: encryption, audio, the microphone. It shows nothing; what
+ * the user sees (the voice panel, its bubble, who is speaking) reads what this
+ * reports to voice/callState.ts (ADR 0016).
+ */
 export function VoiceRoom({
   join,
   channelId,
-  title,
   onConnected,
   onLeave,
   joinStartedAt,
   openTopic = openVoiceTopic,
 }: Props) {
   const [{ room, keyProvider }] = useState(createRoom)
-  const [status, setStatus] = useState<Status>(() =>
+  const [status, setStatus] = useState<CallStatus>(() =>
     isE2EESupported() ? { state: 'securing' } : { state: 'ended', reason: 'unsupported' },
   )
   // Connect to LiveKit, and so publish the microphone, only once we hold a key.
   const [keyed, setKeyed] = useState(false)
+  const { deafened } = useControls()
+
+  useEffect(() => {
+    reportCall({ status })
+  }, [status])
+  useEffect(() => () => resetCallState(), [])
 
   useEffect(() => {
     if (!isE2EESupported()) return
@@ -155,23 +155,13 @@ export function VoiceRoom({
       onDisconnected={() => !ended && onLeave()}
       className="voice-room"
     >
-      <h2>{title}</h2>
-      <EncryptionPanel status={status} />
-      {!ended && <ParticipantList />}
-      {!ended && <Microphone onLeave={onLeave} />}
-      {ended && (
-        <div className="controls">
-          <button type="button" onClick={onLeave}>
-            Leave
-          </button>
-        </div>
-      )}
       {!ended && (
         <>
-          <ConnectionStats />
-          <IncomingAudioStats />
-          {/* Plays every remote participant's audio. */}
-          <RoomAudioRenderer />
+          <Microphone />
+          <ConnectionReporter />
+          <SpeakerReporter />
+          {/* Plays every remote participant's audio; nothing while deafened. */}
+          <RoomAudioRenderer muted={deafened} />
         </>
       )}
     </LiveKitRoom>
@@ -179,18 +169,16 @@ export function VoiceRoom({
 }
 
 /**
- * Publishes the microphone with the chosen device, talks only while the
- * push-to-talk keys are held (muted from the start), follows device changes
- * during the call, and shows the call's controls and voice settings.
+ * Publishes the microphone with the chosen device. Muted by the user's mute
+ * switch; in push-to-talk it opens only while the keys are held (and nothing
+ * is sent before the first press). Follows device changes during the call.
  */
-function Microphone({ onLeave }: { onLeave: () => void }) {
+function Microphone() {
   const room = useRoomContext()
   const connection = useConnectionState()
   const settings = useVoiceSettings()
+  const { muted } = useControls()
   const [track, setTrack] = useState<LocalAudioTrack>()
-  const [failed, setFailed] = useState(false)
-  const [talking, setTalking] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
   const publishing = useRef(false)
 
   // Once connected: open the microphone and publish it (once per call).
@@ -203,11 +191,14 @@ function Microphone({ onLeave }: { onLeave: () => void }) {
         ...CAPTURE,
         deviceId: microphoneId || undefined,
       })
-      // Push-to-talk: nothing is sent before the keys are held.
-      if (mode === 'push') await mic.mute()
+      // Push-to-talk or muted: nothing is sent before the user means to talk.
+      if (mode === 'push' || muted) await mic.mute()
       await room.localParticipant.publishTrack(mic, { source: Track.Source.Microphone })
       setTrack(mic)
-    })().catch(() => setFailed(true))
+      reportCall({ micTrack: mic.mediaStreamTrack, micFailed: false })
+    })().catch(() => reportCall({ micFailed: true }))
+    // `muted` is read once for the first publish; changes are handled below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connection, room])
 
   // Devices chosen during the call (the call started with the saved ones).
@@ -215,7 +206,10 @@ function Microphone({ onLeave }: { onLeave: () => void }) {
   useEffect(() => {
     if (!track || settings.microphoneId === devices.current.microphoneId) return
     devices.current = { ...devices.current, microphoneId: settings.microphoneId }
-    void room.switchActiveDevice('audioinput', settings.microphoneId || 'default').catch(() => {})
+    void room
+      .switchActiveDevice('audioinput', settings.microphoneId || 'default')
+      .then(() => reportCall({ micTrack: track.mediaStreamTrack }))
+      .catch(() => {})
   }, [room, track, settings.microphoneId])
   useEffect(() => {
     if (settings.speakerId === devices.current.speakerId) return
@@ -223,223 +217,74 @@ function Microphone({ onLeave }: { onLeave: () => void }) {
     void room.switchActiveDevice('audiooutput', settings.speakerId || 'default').catch(() => {})
   }, [room, settings.speakerId])
 
-  // Voice activity: always open (the user can still mute). Push-to-talk:
-  // open only while the keys are held.
+  // Muted: closed. Voice activity: open. Push-to-talk: open while the keys are held.
   const pushKeys = settings.mode === 'push' ? settings.pushKeys.join('+') : ''
   useEffect(() => {
     if (!track) return
+    reportCall({ talking: false })
+    if (muted) {
+      void track.mute()
+      return
+    }
     if (!pushKeys) {
       void track.unmute()
       return
     }
     void track.mute()
     return watchPushToTalk(pushKeys.split('+'), (down) => {
-      setTalking(down)
+      reportCall({ talking: down })
       void (down ? track.unmute() : track.mute())
     })
-  }, [track, pushKeys])
+  }, [track, pushKeys, muted])
 
-  return (
-    <>
-      <div className="controls">
-        {settings.mode === 'push' ? (
-          <p className={talking ? 'ptt talking' : 'ptt'} role="status">
-            {talking ? 'Talking' : `Hold ${formatKeys(settings.pushKeys)} to talk`}
-          </p>
-        ) : (
-          <TrackToggle source={Track.Source.Microphone}>Microphone</TrackToggle>
-        )}
-        <button
-          type="button"
-          aria-expanded={showSettings}
-          onClick={() => setShowSettings((v) => !v)}
-        >
-          Voice settings
-        </button>
-        <button type="button" onClick={onLeave}>
-          Leave
-        </button>
-      </div>
-      {failed && (
-        <p className="form-message" role="alert">
-          The microphone could not be opened. Check that the browser may use it, then join again.
-        </p>
-      )}
-      {showSettings && <VoiceSettingsPanel liveTrack={track?.mediaStreamTrack} />}
-    </>
-  )
+  return null
 }
 
-const ENDED: Record<string, string> = {
-  unsupported:
-    'This browser cannot encrypt calls end to end, so you cannot join. Try a current Chrome, Edge or Firefox.',
-  failed: 'The call could not be encrypted, so you were disconnected. Leave and join again.',
-  removed: 'You no longer have access to this channel.',
-  superseded: 'You joined this channel from another tab or device.',
-}
-
-/** Shows that the call is end-to-end encrypted, with whom, and the code to compare. */
-export function EncryptionPanel({ status }: { status: Status }) {
-  const participants = useParticipants()
-  if (status.state === 'securing')
-    return (
-      <p className="e2ee" role="status">
-        Securing the call…
-      </p>
-    )
-  if (status.state === 'ended')
-    return (
-      <p className="e2ee e2ee-off" role="alert">
-        {ENDED[status.reason]}
-      </p>
-    )
-
-  const names = new Map(participants.map((p) => [p.identity, p.name || 'Anonymous']))
-  return (
-    <section className="e2ee" aria-label="Encryption">
-      <p>
-        <span aria-hidden="true">🔒</span> <strong>End-to-end encrypted.</strong> Only the people
-        below hold the key; the server cannot listen.
-      </p>
-      <p className="muted">
-        Key shared with:{' '}
-        {status.members
-          .map((id) => names.get(id) ?? 'someone not in this call (check the code!)')
-          .join(', ')}
-      </p>
-      <p>
-        Verification code: <code className="verification-code">{status.code}</code>
-      </p>
-      <p className="muted">
-        Compare it with the others in the call (for example by reading it aloud). If everyone sees
-        the same code, nobody else is listening in. It changes when someone joins or leaves.
-      </p>
-    </section>
-  )
-}
-
-function ParticipantList() {
-  const participants = useParticipants()
-  return (
-    <ul className="participants" aria-label="Participants">
-      {participants.map((p) => (
-        <ParticipantRow key={p.identity} participant={p} />
-      ))}
-    </ul>
-  )
-}
-
-function ParticipantRow({ participant }: { participant: Participant }) {
-  const speaking = useIsSpeaking(participant)
-  return (
-    <li className={speaking ? 'speaking' : undefined}>
-      <span className="dot" aria-hidden="true" />
-      {participant.name || 'Anonymous'}
-      {participant.isLocal && ' (you)'}
-      {speaking && <span className="visually-hidden"> is speaking</span>}
-    </li>
-  )
-}
-
-type Stats = { rttMs?: number; jitterMs?: number; packetsLost?: number }
-
-/**
- * First latency measurement (roadmap Phase 1): round-trip time and jitter of our
- * outgoing audio as reported by WebRTC. Full mouth-to-ear p95 comes in Phase 7.
- */
-function ConnectionStats() {
-  const { localParticipant } = useLocalParticipant()
-  const [stats, setStats] = useState<Stats>({})
+/** Round trip of our audio and the share of incoming packets lost, every two seconds. */
+function ConnectionReporter() {
+  const room = useRoomContext()
+  const previous = useRef(new Map<string, InboundAudioSample>())
 
   useEffect(() => {
     let cancelled = false
     const timer = window.setInterval(async () => {
-      const track = localParticipant.getTrackPublication(Track.Source.Microphone)?.audioTrack
-      if (!(track instanceof LocalAudioTrack)) return
-      const sender = await track.getSenderStats()
-      if (cancelled || !sender) return
-      setStats({
-        rttMs: sender.roundTripTime !== undefined ? sender.roundTripTime * 1000 : undefined,
-        jitterMs: sender.jitter !== undefined ? sender.jitter * 1000 : undefined,
-        packetsLost: sender.packetsLost,
+      const mic = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.audioTrack
+      const sender = mic instanceof LocalAudioTrack ? await mic.getSenderStats() : undefined
+      const losses: number[] = []
+      for (const p of room.remoteParticipants.values()) {
+        const track = p.getTrackPublication(Track.Source.Microphone)?.audioTrack
+        if (!(track instanceof RemoteAudioTrack)) continue
+        const current = await track.getReceiverStats()
+        if (!current) continue
+        const { lossRate } = summariseInbound(current, previous.current.get(p.identity))
+        previous.current.set(p.identity, current)
+        if (lossRate !== undefined) losses.push(lossRate)
+      }
+      if (cancelled) return
+      reportCall({
+        rttMs: sender?.roundTripTime !== undefined ? sender.roundTripTime * 1000 : undefined,
+        lossRate: losses.length ? Math.max(...losses) : undefined,
       })
     }, 2000)
     return () => {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [localParticipant])
+  }, [room])
 
-  const fmt = (v?: number) => (v === undefined ? '–' : `${Math.round(v)} ms`)
-  return (
-    <dl className="stats" aria-label="Connection">
-      <dt>Round trip</dt>
-      <dd>{fmt(stats.rttMs)}</dd>
-      <dt>Jitter</dt>
-      <dd>{fmt(stats.jitterMs)}</dd>
-      <dt>Packets lost</dt>
-      <dd>{stats.packetsLost ?? '–'}</dd>
-    </dl>
-  )
+  return null
 }
 
-const pct = (v?: number) => (v === undefined ? '–' : `${(v * 100).toFixed(1)} %`)
-const ms = (v?: number) => (v === undefined ? '–' : `${Math.round(v)} ms`)
-
-/**
- * What we receive from each other participant over the last two seconds.
- * "Concealed" is the share of audio the browser had to fill in because packets
- * were missing or late; above about 2 % speech starts to sound choppy.
- */
-function IncomingAudioStats() {
-  const participants = useRemoteParticipants()
-  if (participants.length === 0) return null
-  return (
-    <table className="stats-table">
-      <caption>Incoming audio</caption>
-      <thead>
-        <tr>
-          <th scope="col">From</th>
-          <th scope="col">Lost</th>
-          <th scope="col">Jitter</th>
-          <th scope="col">Concealed</th>
-        </tr>
-      </thead>
-      <tbody>
-        {participants.map((p) => (
-          <IncomingRow key={p.identity} participant={p} />
-        ))}
-      </tbody>
-    </table>
-  )
-}
-
-function IncomingRow({ participant }: { participant: RemoteParticipant }) {
-  const [summary, setSummary] = useState<InboundAudioSummary>({})
-  const previous = useRef<InboundAudioSample | undefined>(undefined)
-
+/** Who is speaking right now (the channel list highlights them). */
+function SpeakerReporter() {
+  const room = useRoomContext()
   useEffect(() => {
-    let cancelled = false
-    const timer = window.setInterval(async () => {
-      const track = participant.getTrackPublication(Track.Source.Microphone)?.audioTrack
-      if (!(track instanceof RemoteAudioTrack)) return
-      const current = await track.getReceiverStats()
-      if (cancelled || !current) return
-      setSummary(summariseInbound(current, previous.current))
-      previous.current = current
-    }, 2000)
+    const onChange = (speakers: Participant[]) =>
+      reportCall({ speaking: speakers.map((p) => p.identity) })
+    room.on(RoomEvent.ActiveSpeakersChanged, onChange)
     return () => {
-      cancelled = true
-      window.clearInterval(timer)
+      room.off(RoomEvent.ActiveSpeakersChanged, onChange)
     }
-  }, [participant])
-
-  return (
-    <tr>
-      <th scope="row">{participant.name || 'Anonymous'}</th>
-      <td>{pct(summary.lossRate)}</td>
-      <td>{ms(summary.jitterMs)}</td>
-      <td>{pct(summary.concealedRate)}</td>
-    </tr>
-  )
+  }, [room])
+  return null
 }

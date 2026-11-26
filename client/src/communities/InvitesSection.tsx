@@ -57,7 +57,7 @@ export function InvitesSection({ communityId }: { communityId: string }) {
 
   return (
     <>
-      <h3>Invites</h3>
+      <h3 className="visually-hidden">Invites</h3>
       <form className="stack-form" onSubmit={create} aria-label="New invite">
         <label htmlFor="invite-lifetime">Expires after</label>
         <select
