@@ -104,7 +104,13 @@ Put the contents of `nosilence-update.key.pub` into `plugins.updater.pubkey` in
 
 To release: raise `version` in `desktop/tauri.conf.json`, merge, then push a tag
 `desktop-v<version>`. The `Desktop release` workflow builds the installer and the
-signed update and publishes them with `latest.json`.
+signed update, checks that the signature matches the public key in
+`tauri.conf.json` (`tools/verify-update-signature.mjs`), and publishes them with
+`latest.json`.
+
+A tag `desktop-v<version>-rc.<n>` (for example `desktop-v0.1.0-rc.1`) runs the same
+path but publishes a pre-release: installed apps ignore it, because they only look at
+the latest release. Use it to try the real key before a real release.
 
 ### Testing voice on one computer
 

@@ -5,6 +5,10 @@
 # releases/latest/download/latest.json and accept it only if it carries a valid
 # signature for the public key in tauri.conf.json.
 #
+# A tag `desktop-v<version>-rc.<n>` makes a pre-release instead: built and signed the
+# same way, but GitHub does not count it as the latest release, so installed apps
+# never see it. It tries the whole path with the real key before a real release.
+#
 # Secrets: TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD (the
 # update signing key; Burak keeps the original).
 name: Desktop release
@@ -27,10 +31,12 @@ jobs:
         shell: pwsh
         run: |
           $version = (Get-Content desktop/tauri.conf.json -Raw | ConvertFrom-Json).version
-          if ("desktop-v$version" -ne "${{ github.ref_name }}") {
-            throw "Tag ${{ github.ref_name }} does not match tauri.conf.json version $version"
+          $tag = "${{ github.ref_name }}"
+          if (-not ($tag -match "^desktop-v$([regex]::Escape($version))(-rc\.\d+)?$")) {
+            throw "Tag $tag does not match tauri.conf.json version $version"
           }
           "VERSION=$version" | Out-File -Append $env:GITHUB_ENV
+          "PRERELEASE=$([bool]$Matches[1])" | Out-File -Append $env:GITHUB_ENV
 
       - name: The update public key is set
         shell: pwsh
@@ -68,6 +74,14 @@ jobs:
           '{"bundle":{"createUpdaterArtifacts":true}}' | Out-File -Encoding utf8NoBOM release.json
           npx tauri build --config release.json
 
+      # Installed apps would refuse an update signed by any other key.
+      - name: The update is signed by the key the app trusts
+        shell: pwsh
+        run: |
+          $setup = "desktop/target/release/bundle/nsis/Nosilence_${env:VERSION}_x64-setup.exe"
+          node tools/verify-update-signature.mjs $setup "$setup.sig" desktop/tauri.conf.json
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
       - name: Publish the release
         working-directory: desktop/target/release/bundle/nsis
         env:
@@ -87,6 +101,14 @@ jobs:
             }
           }
           $manifest | ConvertTo-Json -Depth 5 | Out-File -Encoding utf8NoBOM latest.json
+          if ($env:PRERELEASE -eq 'True') {
+            $title = "Nosilence ${env:VERSION} (${{ github.ref_name }}, pre-release)"
+            $notes = "Trial build of the release path. Installed apps do not update to it."
+            $kind = '--prerelease'
+          } else {
+            $title = "Nosilence $env:VERSION"
+            $notes = "Windows desktop app $env:VERSION. Installed apps update themselves."
+            $kind = '--latest'
+          }
           gh release create "${{ github.ref_name }}" $setup "$setup.sig" latest.json `
-            --repo "${{ github.repository }}" --title "Nosilence $env:VERSION" `
-            --notes "Windows desktop app $env:VERSION. Installed apps update themselves."
+            --repo "${{ github.repository }}" --title $title --notes $notes $kind
