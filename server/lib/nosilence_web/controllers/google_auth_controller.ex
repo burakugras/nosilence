@@ -130,7 +130,7 @@ defmodule NosilenceWeb.GoogleAuthController do
         conn
         |> UserAuth.log_sign_in(user)
         |> json(%{
-          user: %{id: user.id, email: user.email, display_name: user.display_name},
+          user: NosilenceWeb.UserJSON.user(user),
           token: token
         })
 
@@ -151,7 +151,7 @@ defmodule NosilenceWeb.GoogleAuthController do
       conn
       |> UserAuth.log_sign_in(user)
       |> json(%{
-        user: %{id: user.id, email: user.email, display_name: user.display_name},
+        user: NosilenceWeb.UserJSON.user(user),
         token: Accounts.create_session(user)
       })
     else
@@ -212,7 +212,7 @@ defmodule NosilenceWeb.GoogleAuthController do
             |> delete_resp_cookie(@signup_cookie, cookie_opts(0))
             |> UserAuth.log_sign_in(user)
             |> UserAuth.put_session_cookie(Accounts.create_session(user))
-            |> json(%{user: %{id: user.id, email: user.email, display_name: user.display_name}})
+            |> json(%{user: NosilenceWeb.UserJSON.user(user)})
 
           {:error, changeset} ->
             conn |> put_status(:unprocessable_entity) |> json(ChangesetJSON.errors(changeset))

@@ -15,6 +15,7 @@ vi.mock('../api/messages', () => ({
     )
   },
   deleteMessage: () => Promise.resolve(),
+  editMessage: () => Promise.reject(new Error('not used here')),
 }))
 
 afterEach(() => {

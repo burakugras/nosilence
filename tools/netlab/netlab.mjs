@@ -43,6 +43,7 @@ const TRACE = process.argv.includes('--trace')
 const PTT = process.argv.includes('--ptt')
 const REJOIN = process.argv.includes('--rejoin')
 const STAY = process.argv.includes('--stay')
+const SOCIAL = process.argv.includes('--social')
 const ONLY = arg('only', '') ? arg('only', '').split(',') : null
 // How many times each reconnect is measured (median and p95 reported).
 const RECONNECTS = Number(arg('reconnects', '5'))
@@ -242,7 +243,14 @@ async function account(name) {
   }
   const session = await api('/api/session', { method: 'POST', body: creds })
   if (session.status !== 200) throw new Error(`could not sign in ${name}: ${JSON.stringify(session.json)}`)
-  return { name, cookie: session.setCookie.split(';')[0] }
+  const cookie = session.setCookie.split(';')[0]
+  // Signed-in users pick a username first (ADR 0015); test accounts get one here.
+  if (!session.json.user.username) {
+    const username = `nl_${name}_${creds.email.split('@')[0].split('-').pop()}`.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 32)
+    const set = await api('/api/me/username', { method: 'PUT', body: { username }, cookie })
+    if (set.status !== 200) throw new Error(`could not set a username for ${name}: ${JSON.stringify(set.json)}`)
+  }
+  return { name, cookie }
 }
 
 /** The shared community, with `receiver` as a member. */
@@ -415,6 +423,53 @@ ${scenario}: ` + trace.map(([n, t]) => `${n}@${t - t0}`).join(' ') + ` heard@${b
 }
 
 // --- Listening test ---------------------------------------------------------
+/**
+ * Friends and a direct message (ADR 0015): the receiver writes from the friends
+ * page; the sender sees the unread badge and the message live.
+ */
+async function socialCheck(sender, user) {
+  const me = async (u) => (await api('/api/me', { cookie: u.cookie })).json.user
+  const tx = await me(sender.user)
+  const rx = await me(user)
+  await api('/api/friends', { method: 'POST', body: { user_id: tx.id }, cookie: user.cookie })
+  await api(`/api/friends/${rx.id}/accept`, { method: 'POST', cookie: sender.user.cookie })
+
+  const b = await browser()
+  try {
+    const page = await open(b, user, `${APP}/friends`)
+    const friends = page.getByRole('list', { name: /^Friends \(/ })
+    await friends.getByText(tx.display_name, { exact: false }).waitFor({ timeout: 10_000 })
+    await friends.getByRole('listitem').filter({ hasText: `@${tx.username}` }).getByRole('button', { name: 'Message' }).click()
+    const box = page.getByRole('textbox', { name: /^Message / })
+    await box.waitFor({ timeout: 10_000 })
+    const text = `netlab dm ${Date.now()}`
+    await box.fill(text)
+    await box.press('Enter')
+
+    const tab = sender.page
+    const badge = tab.getByRole('link', { name: /^Messages/ }).getByLabel(/unread/)
+    let badgeSeen = false
+    try {
+      await badge.waitFor({ timeout: 5_000 })
+      badgeSeen = true
+    } catch {}
+    await tab.getByRole('link', { name: /^Messages/ }).click()
+    await tab.getByRole('link', { name: rx.display_name }).click()
+    let shown = false
+    try {
+      await tab.getByText(text).waitFor({ timeout: 5_000 })
+      shown = true
+    } catch {}
+    const notice = await tab.getByText(/not end-to-end encrypted/).count()
+    console.log(
+      `${badgeSeen && shown && notice > 0 ? 'PASS' : 'FAIL'} direct message: unread badge ${badgeSeen ? 'shown' : 'missing'}, ` +
+        `message ${shown ? 'shown' : 'missing'}, "not end-to-end encrypted" notice ${notice > 0 ? 'shown' : 'missing'}`,
+    )
+  } finally {
+    await b.close()
+  }
+}
+
 /** Opening other pages keeps the call: still heard, still shown in the channel. */
 async function stayInCallCheck(sender, community, user) {
   const b = await browser()
@@ -601,6 +656,10 @@ try {
   }
   if (STAY) {
     await stayInCallCheck(sender, community, receiver)
+    process.exit(0)
+  }
+  if (SOCIAL) {
+    await socialCheck(sender, receiver)
     process.exit(0)
   }
 

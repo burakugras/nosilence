@@ -87,7 +87,10 @@ desktop notifications.
 **Done:** a new version reaches an installed app without reinstalling by hand.
 
 ### Phase 11: Social features (L)
-Direct and group messages, friends, profile picture and status, mentions and reactions.
+Split in two (Burak, 2026-11-26):
+- **11a:** usernames, friends, blocking, direct and group messages (ADR 0015).
+- **11b:** profile picture and status, mentions and reactions, and the notification
+  work deferred from phase 10.
 **Done:** people can find each other and talk outside communities.
 
 ### Phase 12: Release (M)
@@ -114,7 +117,7 @@ Postponed on purpose. Reviewed at the start of every phase.
 | Hosting choice (VPS) | Phase 0 | Phase 12 |
 | Contributor licence agreement before accepting outside contributions | Phase 0 | First outside contribution |
 | Whether to move to `AGPL-3.0-or-later` | Phase 0 | When a new AGPL version is published |
-| End-to-end encrypted text messages | Phase 0 | After the MVP |
+| End-to-end encrypted text messages (channels and conversations: device keys, several devices, offline delivery, history on a new device); Burak will consider doing it before more social features | Phase 0, Phase 11a | Own phase, to be decided |
 | Behind a reverse proxy, rate limits and traffic records need the real client address (trusted `X-Forwarded-For`) | Phase 7a | Phase 12 |
 | Restricted access to traffic records, with every access logged; a way to answer lawful requests | Phase 7a | Phase 12 |
 | Re-check ignored Rust advisories (`.cargo/audit.toml`) when openmls or Tauri are updated | Phase 7a | Every dependency update |

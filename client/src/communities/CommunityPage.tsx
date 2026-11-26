@@ -307,6 +307,7 @@ export function CommunityPage({ communityId, currentUserId, join = requestChanne
 
       <MembersSection
         communityId={community.id}
+        currentUserId={currentUserId}
         myRole={myRole}
         online={online}
         refreshKey={membersKey}

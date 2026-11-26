@@ -95,7 +95,12 @@ defmodule Nosilence.Communities do
            join: u in assoc(m, :user),
            where: m.community_id == ^community_id,
            order_by: [desc: m.role == "owner", desc: m.role == "moderator", asc: u.display_name],
-           select: %{user_id: u.id, display_name: u.display_name, role: m.role}
+           select: %{
+             user_id: u.id,
+             display_name: u.display_name,
+             username: u.username,
+             role: m.role
+           }
        )}
     end
   end

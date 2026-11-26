@@ -96,6 +96,27 @@ defmodule NosilenceWeb.Router do
     post "/socket-token", SocketController, :create
     post "/metrics/call", MetricsController, :report
 
+    # People outside communities (ADR 0015).
+    put "/me/username", SocialController, :set_username
+    patch "/me/privacy", SocialController, :update_privacy
+    get "/friends", SocialController, :friends
+    post "/friends", SocialController, :request
+    post "/friends/:user_id/accept", SocialController, :accept
+    delete "/friends/:user_id", SocialController, :remove
+    post "/blocks/:user_id", SocialController, :block
+    delete "/blocks/:user_id", SocialController, :unblock
+
+    get "/conversations", ConversationController, :index
+    post "/conversations", ConversationController, :create
+    patch "/conversations/:id", ConversationController, :rename
+    post "/conversations/:id/members", ConversationController, :add_members
+    delete "/conversations/:id/members/:user_id", ConversationController, :remove_member
+    get "/conversations/:id/messages", ConversationController, :messages
+    post "/conversations/:id/messages", ConversationController, :send_message
+    post "/conversations/:id/read", ConversationController, :read
+    patch "/conversation-messages/:message_id", ConversationController, :update_message
+    delete "/conversation-messages/:message_id", ConversationController, :delete_message
+
     get "/account/deletion", PrivacyController, :deletion_preview
     delete "/account", PrivacyController, :delete
     get "/account/export", PrivacyController, :export

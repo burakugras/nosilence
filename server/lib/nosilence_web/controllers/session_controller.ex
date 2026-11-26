@@ -54,5 +54,5 @@ defmodule NosilenceWeb.SessionController do
     json(conn, %{user: user_json(conn.assigns.current_user)})
   end
 
-  defp user_json(user), do: %{id: user.id, email: user.email, display_name: user.display_name}
+  defp user_json(user), do: NosilenceWeb.UserJSON.user(user)
 end

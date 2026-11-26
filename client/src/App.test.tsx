@@ -4,16 +4,28 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { setPendingDesktopSignup } from './accounts/desktopSignup'
 
+vi.mock('./gateway/userLive', () => ({
+  startUserLive: () => () => {},
+  onUserEvent: () => () => {},
+  useUserEvents: () => {},
+}))
+vi.mock('./api/conversations', () => ({ listConversations: () => Promise.resolve([]) }))
 vi.mock('./api/communities', () => ({
   listCommunities: () => Promise.resolve([{ id: 'c1', name: 'Ekip', role: 'owner' }]),
   previewInvite: () => Promise.resolve({ id: 'c1', name: 'Ekip' }),
   listOffers: () => Promise.resolve([]),
 }))
 
-const user = { id: 'u1', email: 'burak@example.com', display_name: 'Burak' }
+const user = { id: 'u1', email: 'burak@example.com', display_name: 'Burak', username: 'burak' }
 
 describe('App', () => {
   afterEach(() => window.history.replaceState(null, '', '/'))
+
+  it('asks for a username once, before anything else', async () => {
+    render(<App loadUser={() => Promise.resolve({ ...user, username: null })} />)
+    expect(await screen.findByRole('heading', { name: 'Choose a username' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Ekip' })).toBeNull()
+  })
 
   it('a desktop Google sign-up shows only its form, not the sign-in page', async () => {
     const signedIn = { id: 'u9', email: 'new@example.com', display_name: 'Neo' }

@@ -26,7 +26,7 @@ export class ApiError extends Error {
 }
 
 type Options = {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
   fetchFn?: typeof fetch
   /** Let the request finish even if the page is closing. */

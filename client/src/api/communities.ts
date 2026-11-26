@@ -7,7 +7,12 @@ export type Channel =
   | { id: string; name: string; kind: 'voice'; capacity: number }
   | { id: string; name: string; kind: 'text'; capacity: null; unread?: number }
 export type ChannelKind = Channel['kind']
-export type Member = { user_id: string; display_name: string; role: Role }
+export type Member = {
+  user_id: string
+  display_name: string
+  username?: string | null
+  role: Role
+}
 export type Invite = { id: string; expires_at: string; max_uses: number | null; uses: number }
 
 export const listCommunities = async () =>

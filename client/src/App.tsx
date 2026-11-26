@@ -20,12 +20,19 @@ import { UpdateBanner, UpdateCorner } from './updates/UpdateViews'
 import { ActiveCall } from './voice/ActiveCall'
 import { endCall } from './voice/call'
 import { SettingsPage } from './voice/SettingsPage'
+import { startUserLive } from './gateway/userLive'
+import { ChooseUsernamePage } from './social/ChooseUsernamePage'
+import { ConversationPage } from './social/ConversationPage'
+import { followConversations, totalUnread, useConversations } from './social/conversationsStore'
+import { FriendsPage } from './social/FriendsPage'
+import { MessagesPage } from './social/MessagesPage'
 
 type Props = {
   loadUser?: () => Promise<User | null>
 }
 
 const COMMUNITY_PATH = /^\/c\/([0-9a-f-]{36})$/
+const CONVERSATION_PATH = /^\/messages\/([0-9a-f-]{36})$/
 
 export default function App({ loadUser = currentUser }: Props) {
   // undefined while loading, null when signed out
@@ -39,9 +46,14 @@ export default function App({ loadUser = currentUser }: Props) {
       .catch(() => setUser(null))
   }, [loadUser])
 
-  // Desktop app: notifications for others' messages while signed in (ADR 0014).
+  // The user's own live topic (friends, conversations; ADR 0015), the
+  // conversation list behind the unread badge, and on the desktop
+  // notifications for others' messages (ADR 0014). Order matters: listeners
+  // attach before the topic delivers anything.
   const userId = user?.id
   useEffect(() => (userId ? startMessageNotifications(userId) : undefined), [userId])
+  useEffect(() => (userId ? followConversations() : undefined), [userId])
+  useEffect(() => (userId ? startUserLive(userId) : undefined), [userId])
   // Signed out (or the session ended): the call ends with it.
   useEffect(() => {
     if (!userId) endCall()
@@ -99,7 +111,16 @@ export default function App({ loadUser = currentUser }: Props) {
     return <Shell>{page}</Shell>
   }
 
+  // Everyone picks a unique username once, before anything else (ADR 0015).
+  if (!user.username)
+    return (
+      <Shell user={user} onSignOut={() => void signOut().then(() => setUser(null))}>
+        <ChooseUsernamePage user={user} onDone={setUser} />
+      </Shell>
+    )
+
   const community = COMMUNITY_PATH.exec(path)
+  const conversation = CONVERSATION_PATH.exec(path)
   const page =
     path === '/account' ? (
       <AccountPage
@@ -110,7 +131,13 @@ export default function App({ loadUser = currentUser }: Props) {
         }}
       />
     ) : path === '/settings' ? (
-      <SettingsPage />
+      <SettingsPage user={user} onUserChange={setUser} />
+    ) : path === '/friends' ? (
+      <FriendsPage />
+    ) : path === '/messages' ? (
+      <MessagesPage currentUserId={user.id} />
+    ) : conversation ? (
+      <ConversationPage key={conversation[1]} id={conversation[1]} currentUserId={user.id} />
     ) : path === '/invite' ? (
       <InvitePage token={params.get('token')} />
     ) : community ? (
@@ -161,7 +188,8 @@ function Shell({
         </h1>
         {user && (
           <p>
-            <Link to="/settings">Settings</Link> <Link to="/account">{user.display_name}</Link>{' '}
+            <MessagesLink /> <Link to="/friends">Friends</Link> <Link to="/settings">Settings</Link>{' '}
+            <Link to="/account">{user.display_name}</Link>{' '}
             <button type="button" className="link-button" onClick={onSignOut}>
               Sign out
             </button>
@@ -171,5 +199,20 @@ function Shell({
       {children}
       {isDesktop && <UpdateCorner />}
     </main>
+  )
+}
+
+/** "Messages", with how many messages from others are unread. */
+function MessagesLink() {
+  const unread = totalUnread(useConversations())
+  return (
+    <Link to="/messages">
+      Messages
+      {unread > 0 && (
+        <span className="unread-count" aria-label={`${unread} unread`}>
+          {unread > 99 ? '99+' : unread}
+        </span>
+      )}
+    </Link>
   )
 }

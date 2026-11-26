@@ -21,6 +21,9 @@ defmodule Nosilence.Accounts.User do
     field :age_confirmed_at, :utc_datetime
     field :age_confirmed, :boolean, virtual: true
     field :google_sub, :string
+    field :username, :string
+    field :friend_requests_from, :string, default: "everyone"
+    field :community_members_can_message, :boolean, default: true
 
     timestamps(type: :utc_datetime)
   end
@@ -65,6 +68,39 @@ defmodule Nosilence.Accounts.User do
         else: %{google_sub: sub, confirmed_at: DateTime.utc_now(:second), hashed_password: nil}
 
     user |> change(changes) |> unique_constraint(:google_sub)
+  end
+
+  # Usernames that would look official.
+  @reserved ~w(admin administrator moderator mod nosilence support help system staff official
+               root everyone here deleted)
+
+  @doc """
+  Choosing or changing the unique username (ADR 0015): 3-32 characters, lower
+  case letters, digits, "_" and ".", not starting or ending with "." and
+  without "..". Compared case-insensitively.
+  """
+  def username_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:username])
+    |> update_change(:username, &(&1 |> String.trim() |> String.downcase()))
+    |> validate_required([:username])
+    |> validate_length(:username, min: 3, max: 32)
+    |> validate_format(:username, ~r/\A[a-z0-9_.]+\z/,
+      message: "can only contain letters, digits, _ and ."
+    )
+    |> validate_format(:username, ~r/\A(?!\.)(?!.*\.\.)(?!.*\.\z)/,
+      message: "cannot start or end with a dot or have two dots in a row"
+    )
+    |> validate_exclusion(:username, @reserved, message: "is reserved")
+    |> unsafe_validate_unique(:username, Nosilence.Repo, message: "is taken")
+    |> unique_constraint(:username, message: "is taken")
+  end
+
+  @doc "Who may send friend requests, and whether community members may message."
+  def privacy_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:friend_requests_from, :community_members_can_message])
+    |> validate_inclusion(:friend_requests_from, ~w(everyone communities))
   end
 
   @doc "Changeset for setting a new password (password reset)."

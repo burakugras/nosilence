@@ -9,6 +9,10 @@ defmodule Nosilence.Events do
 
   def user_topic(user_id), do: "user:" <> user_id
 
+  @doc "An event for one user's own topic (friends, conversations; ADR 0015)."
+  def to_user(user_id, event, payload),
+    do: Phoenix.Channel.Server.broadcast(Nosilence.PubSub, user_topic(user_id), event, payload)
+
   @doc "The user joined a community: their own topic starts following it."
   def memberships_changed(user_id),
     do:

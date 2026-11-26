@@ -509,3 +509,29 @@ main.app:has(.update-corner) {
   padding-bottom: 1rem;
   border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
 }
+
+/* Friends and conversations (ADR 0015) */
+.inline-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.5rem 0;
+}
+
+.inline-form input {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+}
+
+.not-e2ee {
+  margin-top: 0;
+  font-size: 0.85em;
+}
+
+.group-details {
+  margin-bottom: 1rem;
+}
+
+.group-details summary {
+  cursor: pointer;
+}

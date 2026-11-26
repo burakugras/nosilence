@@ -21,6 +21,14 @@ vi.mock('../api/communities', () => ({
   },
 }))
 
+vi.mock('../api/social', () => ({
+  requestFriend: (target: { user_id: string }) => {
+    calls.push(`friend:${target.user_id}`)
+    return Promise.resolve('requested')
+  },
+}))
+vi.mock('../api/conversations', () => ({ openDirect: () => Promise.resolve('d1') }))
+
 const row = async (name: string) =>
   (await screen.findByText(name, { exact: false })).closest('li') as HTMLElement
 
@@ -47,5 +55,21 @@ describe('MembersSection', () => {
     expect(within(await row('Ayşe')).queryByRole('button')).toBeNull()
     expect(within(await row('Burak')).queryByRole('button')).toBeNull()
     expect(screen.queryByRole('button', { name: /moderator/ })).toBeNull()
+  })
+
+  it('others can be messaged or added as friends, not the user', async () => {
+    render(
+      <MembersSection
+        communityId="c1"
+        currentUserId="u3"
+        myRole="member"
+        online={new Set()}
+        refreshKey={0}
+      />,
+    )
+    fireEvent.click(within(await row('Ayşe')).getByRole('button', { name: 'Add friend' }))
+    expect(await screen.findByText('Friend request sent to Ayşe.')).toBeInTheDocument()
+    expect(calls).toEqual(['friend:u2'])
+    expect(within(await row('Cem')).queryByRole('button', { name: 'Message' })).toBeNull()
   })
 })

@@ -59,7 +59,12 @@ defmodule Nosilence.Privacy do
             end)
 
           for id <- member_of, do: :ok = Communities.leave_community(user, id)
-          if attrs["delete_messages"] == true, do: Messaging.delete_messages_by(user)
+
+          if attrs["delete_messages"] == true do
+            Messaging.delete_messages_by(user)
+            Nosilence.Social.delete_messages_by(user)
+          end
+
           :ok = Accounts.delete_user(user)
           closed
         end)
@@ -104,6 +109,8 @@ defmodule Nosilence.Privacy do
       account: Accounts.export_account(user),
       memberships: Communities.memberships_of(user),
       messages: Messaging.messages_by(user),
+      conversation_messages: Nosilence.Social.messages_by(user),
+      friends: Nosilence.Social.list_friends(user),
       read_positions: Messaging.read_states_of(user),
       invites_created: Communities.invites_created_by(user),
       traffic_records: TrafficLog.for_user(user.id)

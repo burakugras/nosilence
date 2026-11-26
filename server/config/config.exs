@@ -96,7 +96,9 @@ config :nosilence, Nosilence.RateLimit,
     penalty: 30_000,
     repeat_penalty: 2 * 60_000,
     repeat_window: 5 * 60_000
-  ]
+  ],
+  # friend requests per user (ADR 0015): 20 an hour, then an hour's pause
+  friend_request: [limit: 20, window: 60 * 60_000, penalty: 60 * 60_000]
 
 # Text messages (limits are configuration, see docs/ROADMAP.md rule 6).
 config :nosilence, Nosilence.Messaging, max_message_length: 2000, page_size: 50

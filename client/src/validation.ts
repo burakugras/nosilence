@@ -57,3 +57,15 @@ export function collect(checks: Record<string, string | undefined>): Errors {
     Object.entries(checks).filter((entry): entry is [string, string] => entry[1] !== undefined),
   )
 }
+
+export const USERNAME_RULES =
+  '3-32 characters: letters, digits, _ and . (not at the start or end, not two dots in a row).'
+
+/** The same rules as the server (ADR 0015); case does not matter. */
+export function usernameError(value: string): string | undefined {
+  const name = value.trim().toLowerCase()
+  if (name.length < 3 || name.length > 32) return 'Use 3 to 32 characters.'
+  if (!/^[a-z0-9_.]+$/.test(name)) return 'Use only letters, digits, _ and .'
+  if (name.startsWith('.') || name.endsWith('.') || name.includes('..'))
+    return 'No dot at the start or end, and not two in a row.'
+}
