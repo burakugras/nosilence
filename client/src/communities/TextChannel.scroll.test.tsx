@@ -28,6 +28,7 @@ vi.mock('../api/messages', () => ({
   },
   sendMessage: (_c: string, text: string) => Promise.resolve({ ...msg(50, 'u1'), text }),
   deleteMessage: () => Promise.resolve(),
+  editMessage: () => Promise.reject(new Error('not used here')),
 }))
 
 // jsdom has no layout. From the start, every list is 100 px tall and each

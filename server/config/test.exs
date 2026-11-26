@@ -78,6 +78,7 @@ config :nosilence, Nosilence.RateLimit,
     repeat_window: 5 * 60_000
   ],
   call_report: [limit: 5, window: 60_000],
+  friend_request: [limit: 20, window: 60 * 60_000, penalty: 60 * 60_000],
   test_plain: [limit: 3, window: 200],
   test_penalty: [
     limit: 2,

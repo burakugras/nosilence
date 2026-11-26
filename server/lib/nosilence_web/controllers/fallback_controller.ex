@@ -38,6 +38,19 @@ defmodule NosilenceWeb.FallbackController do
         handover_available_at: until
       })
 
+  # The same answer for unknown, blocked and not-allowed users (ADR 0015).
+  def call(conn, {:error, :cannot_request}),
+    do: error(conn, :unprocessable_entity, "could not send a friend request to this user")
+
+  def call(conn, {:error, :already_friends}),
+    do: error(conn, :conflict, "you are already friends")
+
+  def call(conn, {:error, :too_many_requests}),
+    do: error(conn, :too_many_requests, "too many friend requests, try again later")
+
+  def call(conn, {:error, :cannot_message}),
+    do: error(conn, :forbidden, "you cannot message this person")
+
   def call(conn, {:error, :room_full}), do: error(conn, :conflict, "this voice channel is full")
 
   def call(conn, {:error, :voice_unavailable}),

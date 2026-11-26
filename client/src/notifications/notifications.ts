@@ -6,8 +6,8 @@
  * notifications in its history, where anyone at the screen can read them.
  */
 import { useSyncExternalStore } from 'react'
-import { openUserTopic } from '../gateway/phoenixGateway'
 import type { MessageNotice } from '../gateway/types'
+import { onUserEvent } from '../gateway/userLive'
 import { isDesktop, showNotification } from '../platform'
 
 export type NotificationSettings = {
@@ -76,11 +76,41 @@ export function noticeToNotification(
   }
 }
 
-/** Desktop app, signed in: notify about others' messages. Returns a stop function. */
+/** A direct or group message, as the user's topic delivers it. */
+type DirectMessage = {
+  conversation_id: string
+  text: string
+  author: { id: string; display_name: string } | null
+}
+
+/** A direct message notice: the author, and the text only if the user asked for it. */
+export function directMessageNotification(
+  message: DirectMessage,
+  settings: NotificationSettings,
+  appFocused: boolean,
+): { title: string; body: string } | null {
+  if (!settings.enabled || appFocused || !message.author) return null
+  const title = `${message.author.display_name} sent you a message`
+  if (!settings.preview) return { title, body: 'Direct message' }
+  const text = message.text.replace(/\s+/g, ' ').trim()
+  return { title, body: text.length > MAX_PREVIEW ? `${text.slice(0, MAX_PREVIEW - 1)}…` : text }
+}
+
+/**
+ * Desktop app, signed in: notify about others' messages in communities and
+ * conversations (the user's topic, opened by the app). Returns a stop function.
+ */
 export function startMessageNotifications(userId: string): () => void {
   if (!isDesktop) return () => {}
-  return openUserTopic(userId, (notice) => {
-    const shown = noticeToNotification(notice, getNotificationSettings(), document.hasFocus())
+  return onUserEvent((event, payload) => {
+    const focused = document.hasFocus()
+    const settings = getNotificationSettings()
+    const shown =
+      event === 'notify'
+        ? noticeToNotification(payload as MessageNotice, settings, focused)
+        : event === 'dm_created' && (payload as DirectMessage).author?.id !== userId
+          ? directMessageNotification(payload as DirectMessage, settings, focused)
+          : null
     if (shown) void showNotification(shown.title, shown.body).catch(() => undefined)
   })
 }

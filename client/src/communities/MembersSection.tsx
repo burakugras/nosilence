@@ -1,18 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useCallback, useEffect, useState } from 'react'
 import { listMembers, removeMember, setRole, type Member, type Role } from '../api/communities'
+import { openDirect } from '../api/conversations'
 import { ApiError } from '../api/http'
+import { requestFriend } from '../api/social'
+import { navigate } from '../router'
 import { FormMessage } from '../components/Field'
 import { outranks } from './roles'
 
 export function MembersSection({
   communityId,
+  currentUserId,
   myRole,
   online,
   refreshKey,
   onLoaded,
 }: {
   communityId: string
+  /** Others get "Message" and "Add friend" (ADR 0015). */
+  currentUserId?: string
   /** The signed-in user's role here. */
   myRole: Role
   /** Ids of members connected right now. */
@@ -46,6 +52,33 @@ export function MembersSection({
     }
   }
 
+  const [sent, setSent] = useState<string>()
+
+  async function social(action: () => Promise<unknown>, failure: string) {
+    setMessage(undefined)
+    try {
+      await action()
+    } catch (e) {
+      setMessage(e instanceof ApiError ? e.message : failure)
+    }
+  }
+
+  const openMessages = (m: Member) =>
+    void social(
+      async () => navigate(`/messages/${await openDirect(m.user_id)}`),
+      'Could not open a conversation.',
+    )
+
+  const befriend = (m: Member) =>
+    void social(async () => {
+      const result = await requestFriend({ user_id: m.user_id })
+      setSent(
+        result === 'accepted'
+          ? `You and ${m.display_name} are now friends.`
+          : `Friend request sent to ${m.display_name}.`,
+      )
+    }, 'Could not send a friend request.')
+
   const remove = (m: Member) =>
     window.confirm(`Remove ${m.display_name} from this community?`) &&
     void act(() => removeMember(communityId, m.user_id), 'Could not remove the member.')
@@ -68,6 +101,16 @@ export function MembersSection({
               {m.display_name} {m.role !== 'member' && <span className="badge">{m.role}</span>}
             </span>
             <span>
+              {currentUserId && m.user_id !== currentUserId && (
+                <>
+                  <button type="button" className="link-button" onClick={() => openMessages(m)}>
+                    Message
+                  </button>{' '}
+                  <button type="button" className="link-button" onClick={() => befriend(m)}>
+                    Add friend
+                  </button>{' '}
+                </>
+              )}
               {myRole === 'owner' && m.role === 'member' && (
                 <button
                   type="button"
@@ -95,6 +138,7 @@ export function MembersSection({
           </li>
         ))}
       </ul>
+      {sent && <p role="status">{sent}</p>}
       <FormMessage text={message} />
     </>
   )

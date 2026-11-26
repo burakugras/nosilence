@@ -7,6 +7,7 @@ import {
   useState,
   type FormEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from 'react'
 import { ApiError } from '../api/http'
 import {
@@ -42,8 +43,33 @@ function inSight(el: HTMLElement, id: string) {
   return top < el.scrollTop + el.clientHeight && top + li.offsetHeight > el.scrollTop
 }
 
+/**
+ * Where the messages come from. A community text channel by default; a
+ * conversation (direct or group, ADR 0015) passes its own.
+ */
+export type MessageApi = {
+  list: typeof listMessages
+  send: typeof sendMessage
+  edit: typeof editMessage
+  remove: typeof deleteMessage
+  markRead: typeof markRead
+}
+
+const CHANNEL_API: MessageApi = {
+  list: listMessages,
+  send: sendMessage,
+  edit: editMessage,
+  remove: deleteMessage,
+  markRead,
+}
+
 type Props = {
   channel: { id: string; name: string }
+  api?: MessageApi
+  /** The heading and the composer's label; "#<channel name>" by default. */
+  title?: string
+  /** Shown under the heading (for example "not end-to-end encrypted"). */
+  notice?: ReactNode
   currentUserId: string
   /** Owners may delete anyone's messages. */
   canDeleteAny: boolean
@@ -52,7 +78,16 @@ type Props = {
   onUnreadChange?: (count: number) => void
 }
 
-export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnreadChange }: Props) {
+export function TextChannel({
+  channel,
+  api = CHANNEL_API,
+  title = `#${channel.name}`,
+  notice,
+  currentUserId,
+  canDeleteAny,
+  live,
+  onUnreadChange,
+}: Props) {
   const [history, setHistory] = useState<History>()
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
@@ -192,7 +227,8 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
   // Latest page on open and after every reconnect.
   useEffect(() => {
     let active = true
-    listMessages(channel.id)
+    api
+      .list(channel.id)
       .then((page) => {
         if (!active) return
         setHistory((current) => {
@@ -208,7 +244,7 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
     return () => {
       active = false
     }
-  }, [channel.id, generation])
+  }, [api, channel.id, generation])
 
   useEffect(
     () =>
@@ -242,8 +278,8 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
     pendingRead.current = undefined
     if (!target || target.seq <= savedSeq.current) return
     savedSeq.current = target.seq
-    markRead(channel.id, target.id).catch(() => undefined)
-  }, [channel.id])
+    api.markRead(channel.id, target.id).catch(() => undefined)
+  }, [api, channel.id])
 
   useEffect(() => {
     const el = list.current
@@ -292,7 +328,7 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
   async function loadOlder() {
     if (!messages?.length) return
     try {
-      const page = await listMessages(channel.id, messages[0].id)
+      const page = await api.list(channel.id, messages[0].id)
       heightBeforeOlder.current = list.current?.scrollHeight
       setHistory((h) => ({
         messages: merge(h?.messages ?? [], page.messages),
@@ -311,7 +347,7 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
     setSending(true)
     setMessage(undefined)
     try {
-      const sent = await sendMessage(channel.id, text.trim())
+      const sent = await api.send(channel.id, text.trim())
       // Your own message always brings you to the end.
       scrollToEnd.current = true
       update((ms) => merge(ms, [sent]))
@@ -342,7 +378,7 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
   async function remove(m: Message) {
     if (!window.confirm('Delete this message?')) return
     try {
-      await deleteMessage(m.id)
+      await api.remove(m.id)
       update((ms) => ms.filter((c) => c.id !== m.id))
     } catch (e) {
       setMessage(e instanceof ApiError ? e.message : 'Could not delete the message.')
@@ -350,8 +386,9 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
   }
 
   return (
-    <section className="text-channel" aria-label={`#${channel.name}`}>
-      <h3>#{channel.name}</h3>
+    <section className="text-channel" aria-label={title}>
+      <h3>{title}</h3>
+      {notice}
       {history?.hasMore && (
         <button type="button" className="link-button" onClick={() => void loadOlder()}>
           Load older messages
@@ -405,6 +442,7 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
                 </div>
                 {editingId === m.id ? (
                   <EditBox
+                    edit={api.edit}
                     message={m}
                     onDone={(edited) => {
                       if (edited) update((ms) => ms.map((x) => (x.id === edited.id ? edited : x)))
@@ -430,7 +468,7 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
       )}
       <form className="composer" onSubmit={(e) => void send(e)} aria-label="Send a message">
         <textarea
-          aria-label={`Message #${channel.name}`}
+          aria-label={`Message ${title}`}
           value={text}
           maxLength={MAX_MESSAGE}
           rows={2}
@@ -453,7 +491,15 @@ export function TextChannel({ channel, currentUserId, canDeleteAny, live, onUnre
 }
 
 /** Edits the user's own message in place: Enter saves, Escape cancels. */
-function EditBox({ message, onDone }: { message: Message; onDone: (edited?: Message) => void }) {
+function EditBox({
+  message,
+  edit,
+  onDone,
+}: {
+  message: Message
+  edit: MessageApi['edit']
+  onDone: (edited?: Message) => void
+}) {
   const [text, setText] = useState(message.text)
   const [error, setError] = useState<string>()
 
@@ -462,7 +508,7 @@ function EditBox({ message, onDone }: { message: Message; onDone: (edited?: Mess
     if (problem) return setError(problem)
     if (text.trim() === message.text) return onDone()
     try {
-      onDone(await editMessage(message.id, text.trim()))
+      onDone(await edit(message.id, text.trim()))
     } catch (e) {
       setError(e instanceof ApiError ? (e.field('text') ?? e.message) : 'Could not save the edit.')
     }

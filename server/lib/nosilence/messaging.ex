@@ -280,7 +280,11 @@ defmodule Nosilence.Messaging do
     end
   end
 
-  defp validate_text(text) do
+  @doc """
+  Checks and trims a message text (also for conversation messages): `{:ok, text}`
+  or `{:error, changeset}`.
+  """
+  def validate_text(text) do
     max = limits()[:max_message_length]
     text = if is_binary(text), do: String.trim(text), else: text
 

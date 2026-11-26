@@ -2,7 +2,17 @@
 import { clearSessionToken, desktopGoogleSignIn, isDesktop, saveSessionToken } from '../platform'
 import { ApiError, request } from './http'
 
-export type User = { id: string; email: string; display_name: string }
+export type User = {
+  id: string
+  email: string
+  display_name: string
+  /** Unique, chosen once after signing up (ADR 0015); null until then. */
+  username?: string | null
+  /** Who may send friend requests. */
+  friend_requests_from?: 'everyone' | 'communities'
+  /** Whether people in shared communities may start a conversation. */
+  community_members_can_message?: boolean
+}
 
 export type Registration = {
   email: string

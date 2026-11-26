@@ -3,7 +3,7 @@ import { Presence, Socket } from 'phoenix'
 import { fetchSocketTicket } from '../api/messages'
 import { ApiError } from '../api/http'
 import { socketUrl } from '../platform'
-import type { ConnectCommunity, MessageNotice, OnlineMember, OpenVoiceTopic } from './types'
+import type { ConnectCommunity, OnlineMember, OpenVoiceTopic } from './types'
 
 // Retry quickly at first so a short network drop recovers within the 3 s target.
 const RECONNECT_MS = [100, 500, 1000, 2000]
@@ -106,18 +106,34 @@ export const connectCommunity: ConnectCommunity = (communityId, listener) => {
   }
 }
 
+/** Events on the user's own topic (ADR 0014, ADR 0015). */
+const USER_EVENTS = [
+  'notify',
+  'friends_changed',
+  'conversation_changed',
+  'dm_created',
+  'dm_updated',
+  'dm_deleted',
+] as const
+export type UserEventName = (typeof USER_EVENTS)[number] | 'joined'
+
 /**
- * The user's own topic: messages others write in any of their communities, for
- * desktop notifications (ADR 0014). Returns a function that stops listening.
+ * The user's own topic: friends, conversations and their messages, and
+ * messages in their communities for desktop notifications. `joined` is
+ * reported on every (re)join, so views can reload what they may have missed.
+ * Returns a function that stops listening.
  */
-export function openUserTopic(userId: string, onNotice: (notice: MessageNotice) => void) {
+export function openUserTopic(
+  userId: string,
+  onEvent: (event: UserEventName, payload: unknown) => void,
+) {
   let closed = false
   let channel: ReturnType<Socket['channel']> | undefined
   void acquireSocket().then((s) => {
     if (closed) return releaseSocket()
     channel = s.channel(`user:${userId}`)
-    channel.on('notify', (notice: MessageNotice) => onNotice(notice))
-    channel.join()
+    for (const name of USER_EVENTS) channel.on(name, (payload) => onEvent(name, payload))
+    channel.join().receive('ok', () => onEvent('joined', null))
   })
   return () => {
     if (closed) return
