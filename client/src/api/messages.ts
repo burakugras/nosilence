@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { request } from './http'
 
+/** One emoji on a message: how many put it there, and whether the user did. */
+export type Reaction = { emoji: string; count: number; me: boolean }
+
+/**
+ * Who a message mentions (ADR 0017): ids the app picked out of the text, and
+ * "everyone" or "here" (moderators and the owner). The server never reads the
+ * text for them.
+ */
+export type Mentions = { mentions?: string[]; mention?: 'everyone' | 'here' | null }
+
 export type Message = {
   id: string
   /** Order within the channel, assigned by the server. */
@@ -8,7 +18,11 @@ export type Message = {
   channel_id: string
   text: string
   /** Null when the author's account was deleted. */
-  author: { id: string; display_name: string } | null
+  author: { id: string; display_name: string; avatar?: number | null } | null
+  mentions?: string[]
+  mention?: 'everyone' | 'here' | null
+  /** Null or missing in live events: keep the reactions already shown. */
+  reactions?: Reaction[] | null
   inserted_at: string
   /** Set when the author edited the text. */
   edited_at?: string | null
@@ -27,11 +41,11 @@ export const listMessages = (channelId: string, before?: string) =>
     `/api/channels/${channelId}/messages` + (before ? `?before=${encodeURIComponent(before)}` : ''),
   )
 
-export const sendMessage = async (channelId: string, text: string) =>
+export const sendMessage = async (channelId: string, text: string, mentions: Mentions = {}) =>
   (
     await request<{ message: Message }>(`/api/channels/${channelId}/messages`, {
       method: 'POST',
-      body: { text },
+      body: { text, ...mentions },
     })
   ).message
 
@@ -44,9 +58,19 @@ export const markRead = (channelId: string, messageId: string) =>
     keepalive: true,
   })
 
-export const editMessage = async (id: string, text: string) =>
-  (await request<{ message: Message }>(`/api/messages/${id}`, { method: 'PATCH', body: { text } }))
-    .message
+export const editMessage = async (id: string, text: string, mentions: Mentions = {}) =>
+  (
+    await request<{ message: Message }>(`/api/messages/${id}`, {
+      method: 'PATCH',
+      body: { text, ...mentions },
+    })
+  ).message
+
+/** Adds (`add`) or removes the user's `emoji` on a message. */
+export const reactToMessage = (id: string, emoji: string, add: boolean) =>
+  request<void>(`/api/messages/${id}/reactions/${encodeURIComponent(emoji)}`, {
+    method: add ? 'PUT' : 'DELETE',
+  })
 
 export const deleteMessage = (id: string) =>
   request<void>(`/api/messages/${id}`, { method: 'DELETE' })

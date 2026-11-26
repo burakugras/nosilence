@@ -27,6 +27,8 @@ defmodule NosilenceWeb.RateLimited do
   end
 
   defp what(:message), do: "You are sending messages too fast."
+  defp what(:reaction), do: "You are reacting too fast."
+  defp what(:profile), do: "You are changing your profile too often."
   defp what(rule) when rule in [:sign_in_email, :sign_in_ip], do: "Too many sign-in attempts."
   defp what(_rule), do: "Too many requests."
 

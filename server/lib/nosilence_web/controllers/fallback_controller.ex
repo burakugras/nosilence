@@ -12,6 +12,28 @@ defmodule NosilenceWeb.FallbackController do
   def call(conn, {:error, :sending_too_fast, retry_after_ms}),
     do: NosilenceWeb.RateLimited.too_many(conn, retry_after_ms, :message)
 
+  def call(conn, {:error, :rate_limited, rule, retry_after_ms}),
+    do: NosilenceWeb.RateLimited.too_many(conn, retry_after_ms, rule)
+
+  def call(conn, {:error, :image_too_large}),
+    do:
+      error(
+        conn,
+        :request_entity_too_large,
+        "the picture is larger than #{div(Nosilence.Profiles.max_avatar_bytes(), 1024)} KB"
+      )
+
+  def call(conn, {:error, :invalid_image}),
+    do: error(conn, :unprocessable_entity, "the picture must be a still WebP of at most 256×256")
+
+  def call(conn, {:error, :reaction_limit}),
+    do:
+      error(
+        conn,
+        :unprocessable_entity,
+        "a message can have at most #{Nosilence.Reactions.max_kinds()} different reactions"
+      )
+
   def call(conn, {:error, :not_found}), do: error(conn, :not_found, "not found")
   def call(conn, {:error, :forbidden}), do: error(conn, :forbidden, "not allowed")
 

@@ -54,6 +54,8 @@ export function CommunityMain({
           canDeleteAny={view.canModerate}
           live={view.live}
           onUnreadChange={view.reportUnread}
+          people={view.people}
+          canMentionEveryone={view.canModerate}
         />
       ) : (
         <>

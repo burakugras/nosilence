@@ -15,8 +15,9 @@ defmodule Nosilence.Messaging do
   alias Nosilence.Communities
   alias Nosilence.Communities.Policy
   alias Nosilence.Events
+  alias Nosilence.Communities.Membership
   alias Nosilence.Messaging.{Message, ReadState}
-  alias Nosilence.Repo
+  alias Nosilence.{Reactions, Repo}
 
   # Control characters (except tab and newline) and bidirectional overrides,
   # which can make text display differently from what was sent.
@@ -40,23 +41,39 @@ defmodule Nosilence.Messaging do
             preload: :author
         )
 
+      messages = rows |> Enum.take(size) |> Enum.reverse()
+
       {:ok,
        %{
-         messages: rows |> Enum.take(size) |> Enum.reverse(),
+         messages: messages,
          has_more: length(rows) > size,
-         read: read_state(user, channel.id)
+         read: read_state(user, channel.id),
+         reactions: Reactions.summary(:channel, Enum.map(messages, & &1.id), user.id)
        }}
     end
   end
 
-  @doc "Sends a message to a text channel and announces it to the community."
-  def send_message(%User{} = user, channel_id, text) do
-    with {:ok, channel, _} <- text_channel(user, channel_id, :send_message),
+  @doc """
+  Sends a message to a text channel and announces it to the community.
+  `mentions` (ADR 0017) holds `"mentions"` (user ids the author's app picked
+  out of the text) and `"mention"` (`"everyone"` or `"here"`, moderators and
+  the owner only). The server never reads the text for them.
+  """
+  def send_message(%User{} = user, channel_id, text, mentions \\ %{}) do
+    with {:ok, channel, membership} <- text_channel(user, channel_id, :send_message),
          {:ok, text} <- validate_text(text),
+         {:ok, ids, scope} <- validate_mentions(channel, membership, mentions),
          :ok <- message_allowed(user) do
       # `log: false`: the query log would print the content as a parameter.
       message =
-        Repo.insert!(%Message{channel_id: channel.id, author_id: user.id, content: text},
+        Repo.insert!(
+          %Message{
+            channel_id: channel.id,
+            author_id: user.id,
+            content: text,
+            mentions: ids,
+            mention_scope: scope
+          },
           log: false
         )
         |> Map.put(:author, user)
@@ -172,15 +189,16 @@ defmodule Nosilence.Messaging do
   def max_edits, do: @max_edits
 
   @doc """
-  Replaces the text of the user's own message, at most `max_edits/0` times.
-  The previous text is not kept.
+  Replaces the text (and the mentions) of the user's own message, at most
+  `max_edits/0` times. The previous text is not kept.
   """
-  def edit_message(%User{} = user, message_id, text) do
+  def edit_message(%User{} = user, message_id, text, mentions \\ %{}) do
     with {:ok, id} <- Ecto.UUID.cast(message_id),
          %Message{author_id: author} = message when author == user.id <- Repo.get(Message, id),
-         {:ok, channel, _} <- text_channel(user, message.channel_id, :send_message),
+         {:ok, channel, membership} <- text_channel(user, message.channel_id, :send_message),
          {:ok, text} <- validate_text(text),
-         {1, [message]} <- count_edit(message.id, text) do
+         {:ok, ids, scope} <- validate_mentions(channel, membership, mentions),
+         {1, [message]} <- count_edit(message.id, text, ids, scope) do
       message = Map.put(message, :author, user)
       Events.broadcast(channel.community_id, "message_updated", to_payload(message))
       {:ok, message}
@@ -189,18 +207,102 @@ defmodule Nosilence.Messaging do
       {0, []} -> {:error, :edit_limit}
       {:error, %Ecto.Changeset{}} = error -> error
       {:error, :forbidden} -> {:error, :forbidden}
+      {:error, {:invalid, _}} = error -> error
       _ -> {:error, :not_found}
     end
   end
 
   # One statement, so two edits at once cannot both pass the limit.
-  defp count_edit(id, text) do
+  defp count_edit(id, text, mentions, scope) do
     from(m in Message, where: m.id == ^id and m.edit_count < @max_edits, select: m)
     # `log: false`: the query log would print the new text.
     |> Repo.update_all(
-      [set: [content: text, edited_at: DateTime.utc_now()], inc: [edit_count: 1]],
+      [
+        set: [
+          content: text,
+          edited_at: DateTime.utc_now(),
+          mentions: mentions,
+          mention_scope: scope
+        ],
+        inc: [edit_count: 1]
+      ],
       log: false
     )
+  end
+
+  @max_mentions 20
+
+  # Mentioned people must be members of the community; anyone else is dropped
+  # (they could not read the message). Everyone and here need the permission.
+  defp validate_mentions(channel, membership, params) when is_map(params) do
+    scope = params["mention"]
+
+    with {:ok, ids} <- mention_ids(params["mentions"]),
+         :ok <- mention_scope(scope, membership) do
+      members =
+        Repo.all(
+          from m in Membership,
+            where: m.community_id == ^channel.community_id and m.user_id in ^ids,
+            select: m.user_id
+        )
+
+      {:ok, Enum.filter(ids, &(&1 in members)), scope}
+    end
+  end
+
+  defp validate_mentions(_channel, _membership, _params), do: {:ok, [], nil}
+
+  @doc "Checks mention ids from a client (at most 20 UUIDs): `{:ok, ids}` without repeats."
+  def mention_ids(nil), do: {:ok, []}
+
+  def mention_ids(ids) when is_list(ids) and length(ids) <= @max_mentions do
+    Enum.reduce_while(ids, {:ok, []}, fn id, {:ok, acc} ->
+      case Ecto.UUID.cast(id) do
+        {:ok, id} -> {:cont, {:ok, [id | acc]}}
+        :error -> {:halt, {:error, {:invalid, "mentions"}}}
+      end
+    end)
+    |> case do
+      {:ok, ids} -> {:ok, ids |> Enum.reverse() |> Enum.uniq()}
+      error -> error
+    end
+  end
+
+  def mention_ids(_), do: {:error, {:invalid, "mentions"}}
+
+  defp mention_scope(nil, _membership), do: :ok
+
+  defp mention_scope(scope, membership) when scope in ["everyone", "here"] do
+    if Policy.can?(membership, :mention_everyone), do: :ok, else: {:error, :forbidden}
+  end
+
+  defp mention_scope(_scope, _membership), do: {:error, {:invalid, "mention"}}
+
+  @doc """
+  Adds (`add?` true) or removes the user's reaction on a channel message and
+  tells the community. `:ok` or an error.
+  """
+  def react(%User{} = user, message_id, emoji, add?) do
+    with {:ok, id} <- Ecto.UUID.cast(message_id),
+         %Message{} = message <- Repo.get(Message, id),
+         {:ok, channel, _} <- text_channel(user, message.channel_id, :send_message),
+         {:ok, changed?} <- Reactions.set(:channel, message.id, user.id, emoji, add?) do
+      if changed? do
+        Events.broadcast(channel.community_id, "reaction_changed", %{
+          message_id: message.id,
+          channel_id: channel.id,
+          emoji: emoji,
+          user_id: user.id,
+          added: add?
+        })
+      end
+
+      :ok
+    else
+      {:error, _} = error -> error
+      {:error, _, _, _} = error -> error
+      _ -> {:error, :not_found}
+    end
   end
 
   @doc "Deletes a message. Authors delete their own; the owner can delete any."
@@ -244,8 +346,12 @@ defmodule Nosilence.Messaging do
     count
   end
 
-  @doc "The client-facing shape of a message, used by the API and the gateway."
-  def to_payload(%Message{} = m) do
+  @doc """
+  The client-facing shape of a message, used by the API and the gateway.
+  `reactions` come from `Nosilence.Reactions.summary/3`; live events leave them
+  out (`nil`): the apps keep the reactions they have.
+  """
+  def to_payload(%Message{} = m, reactions \\ nil) do
     %{
       id: m.id,
       seq: m.seq,
@@ -254,10 +360,16 @@ defmodule Nosilence.Messaging do
       text: m.content,
       edited_at: m.edited_at,
       edits_left: @max_edits - m.edit_count,
-      author: m.author && %{id: m.author.id, display_name: m.author.display_name},
+      author: m.author && author(m.author),
+      mentions: m.mentions,
+      mention: m.mention_scope,
+      reactions: reactions,
       inserted_at: m.inserted_at
     }
   end
+
+  @doc "The author as messages show them: name and picture version."
+  def author(%User{} = u), do: %{id: u.id, display_name: u.display_name, avatar: u.avatar_version}
 
   defp text_channel(user, channel_id, action) do
     case Communities.authorize_channel(user, channel_id, action) do

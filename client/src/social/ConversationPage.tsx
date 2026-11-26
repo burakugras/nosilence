@@ -52,6 +52,12 @@ export function ConversationPage({
     if (event === 'joined') return setGeneration((g) => g + 1)
     const m = payload as ConversationMessage & { id: string }
     if (m?.conversation_id !== id) return
+    const reaction = payload as {
+      message_id: string
+      emoji: string
+      user_id: string
+      added: boolean
+    }
     const live: LiveEvent | undefined =
       event === 'dm_created'
         ? { type: 'message_created', message: asMessage(m) }
@@ -59,7 +65,9 @@ export function ConversationPage({
           ? { type: 'message_updated', message: asMessage(m) }
           : event === 'dm_deleted'
             ? { type: 'message_deleted', id: m.id, channel_id: id }
-            : undefined
+            : event === 'dm_reaction_changed'
+              ? { type: 'reaction_changed', ...reaction, channel_id: id }
+              : undefined
     if (live) handlers.current.forEach((h) => h(live))
   })
 
@@ -108,7 +116,7 @@ export function ConversationPage({
       title={title}
       icon={
         conversation.kind === 'direct' && other ? (
-          <Avatar id={other.id} name={other.display_name} size="small" />
+          <Avatar id={other.id} name={other.display_name} size="small" avatar={other.avatar} />
         ) : (
           <Icon name="people" />
         )
@@ -133,6 +141,7 @@ export function ConversationPage({
       }
       currentUserId={currentUserId}
       canDeleteAny={false}
+      people={conversation.members}
       live={live}
     />
   )

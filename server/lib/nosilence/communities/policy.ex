@@ -19,6 +19,7 @@ defmodule Nosilence.Communities.Policy do
           | :manage_invites
           | :remove_member
           | :delete_any_message
+          | :mention_everyone
           | :disconnect_voice
           | :create_channel
           | :manage_channels
@@ -27,7 +28,14 @@ defmodule Nosilence.Communities.Policy do
           | :transfer_ownership
 
   @member [:view, :join_voice, :send_message, :leave]
-  @moderator @member ++ [:manage_invites, :remove_member, :delete_any_message, :disconnect_voice]
+  @moderator @member ++
+               [
+                 :manage_invites,
+                 :remove_member,
+                 :delete_any_message,
+                 :disconnect_voice,
+                 :mention_everyone
+               ]
 
   @spec can?(Membership.t() | nil, action()) :: boolean()
   def can?(nil, _action), do: false

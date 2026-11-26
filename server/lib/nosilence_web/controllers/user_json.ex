@@ -9,7 +9,11 @@ defmodule NosilenceWeb.UserJSON do
       display_name: user.display_name,
       username: user.username,
       friend_requests_from: user.friend_requests_from,
-      community_members_can_message: user.community_members_can_message
+      community_members_can_message: user.community_members_can_message,
+      avatar: user.avatar_version,
+      status: user.status,
+      status_text: Nosilence.Profiles.status_text(user),
+      status_expires_at: Nosilence.Profiles.status_text(user) && user.status_expires_at
     }
   end
 end

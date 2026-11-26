@@ -34,6 +34,23 @@ type Options = {
 }
 
 /**
+ * A file from our own API (a profile picture), sent with the same credentials
+ * as `request`. Null when it is missing or not allowed.
+ */
+export async function fetchBlob(path: string, fetchFn: typeof fetch = fetch): Promise<Blob | null> {
+  const token = await sessionToken()
+  try {
+    const response = await fetchFn(apiOrigin + path, {
+      credentials: isDesktop ? 'omit' : 'same-origin',
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+    })
+    return response.ok ? await response.blob() : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * JSON request to our own API. On the web the session lives in an HttpOnly
  * cookie that the browser sends by itself (same origin); this code never sees
  * it. The desktop app sends its stored token as a bearer header instead.

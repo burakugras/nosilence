@@ -8,6 +8,7 @@ let sendCalls = 0
 vi.mock('../api/messages', () => ({
   listMessages: () => Promise.resolve({ messages: [], has_more: false, read: null }),
   markRead: () => Promise.resolve(),
+  reactToMessage: () => Promise.resolve(),
   sendMessage: () => {
     sendCalls += 1
     return Promise.reject(

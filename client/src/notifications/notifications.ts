@@ -5,6 +5,7 @@
  * notification names the author and channel but not the text: Windows keeps
  * notifications in its history, where anyone at the screen can read them.
  */
+import { myStatusChoice } from '../presence/myProfile'
 import { useSyncExternalStore } from 'react'
 import type { MessageNotice } from '../gateway/types'
 import { onUserEvent } from '../gateway/userLive'
@@ -100,9 +101,14 @@ export function directMessageNotification(
  * Desktop app, signed in: notify about others' messages in communities and
  * conversations (the user's topic, opened by the app). Returns a stop function.
  */
-export function startMessageNotifications(userId: string): () => void {
+export function startMessageNotifications(
+  userId: string,
+  doNotDisturb: () => boolean = () => myStatusChoice() === 'dnd',
+): () => void {
   if (!isDesktop) return () => {}
   return onUserEvent((event, payload) => {
+    // Do not disturb (ADR 0017) silences every notification.
+    if (doNotDisturb()) return
     const focused = document.hasFocus()
     const settings = getNotificationSettings()
     const shown =

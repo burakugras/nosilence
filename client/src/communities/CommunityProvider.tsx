@@ -8,6 +8,7 @@ import {
   type Member,
 } from '../api/communities'
 import { useCommunityLive } from '../gateway/useCommunityLive'
+import { rememberAvatars } from '../ui/avatars'
 import { CommunityContext, type CommunityView } from './communityContext'
 import { setCommunityUnread, setOpenChannel } from './communityList'
 
@@ -121,7 +122,21 @@ export function CommunityProvider({
     [openTextId],
   )
 
-  const online = useMemo(() => new Set(live.online.map((m) => m.id)), [live.online])
+  // Invisible people in voice are connected but shown offline (ADR 0017).
+  const presence = useMemo(() => new Map(live.online.map((m) => [m.id, m])), [live.online])
+  const online = useMemo(
+    () => new Set(live.online.filter((m) => m.status !== 'offline').map((m) => m.id)),
+    [live.online],
+  )
+  const people = useMemo(
+    () =>
+      members.map((m) => ({ id: m.user_id, username: m.username, display_name: m.display_name })),
+    [members],
+  )
+  useEffect(
+    () => rememberAvatars(members.map((m) => ({ id: m.user_id, avatar: m.avatar }))),
+    [members],
+  )
 
   const view = useMemo<CommunityView | null>(() => {
     if (!data) return null
@@ -135,7 +150,9 @@ export function CommunityProvider({
       currentUserId,
       live,
       online,
+      presence,
       members,
+      people,
       unread,
       openTextId,
       reportUnread,
@@ -147,7 +164,9 @@ export function CommunityProvider({
     currentUserId,
     live,
     online,
+    presence,
     members,
+    people,
     unread,
     openTextId,
     reportUnread,

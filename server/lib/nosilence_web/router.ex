@@ -92,6 +92,14 @@ defmodule NosilenceWeb.Router do
     post "/channels/:channel_id/read", MessageController, :read
     patch "/messages/:id", MessageController, :update
     delete "/messages/:id", MessageController, :delete
+    put "/messages/:id/reactions/:emoji", MessageController, :add_reaction
+    delete "/messages/:id/reactions/:emoji", MessageController, :remove_reaction
+
+    # Profile picture and status (ADR 0017).
+    put "/me/avatar", ProfileController, :set_avatar
+    delete "/me/avatar", ProfileController, :remove_avatar
+    put "/me/status", ProfileController, :set_status
+    get "/users/:user_id/avatar", ProfileController, :avatar
 
     post "/socket-token", SocketController, :create
     post "/metrics/call", MetricsController, :report
@@ -116,6 +124,14 @@ defmodule NosilenceWeb.Router do
     post "/conversations/:id/read", ConversationController, :read
     patch "/conversation-messages/:message_id", ConversationController, :update_message
     delete "/conversation-messages/:message_id", ConversationController, :delete_message
+
+    put "/conversation-messages/:message_id/reactions/:emoji",
+        ConversationController,
+        :add_reaction
+
+    delete "/conversation-messages/:message_id/reactions/:emoji",
+           ConversationController,
+           :remove_reaction
 
     get "/account/deletion", PrivacyController, :deletion_preview
     delete "/account", PrivacyController, :delete

@@ -16,6 +16,7 @@ defmodule Nosilence.Social.ConversationMessage do
     field :seq, :integer, read_after_writes: true
     field :edited_at, :utc_datetime_usec
     field :edit_count, :integer, default: 0
+    field :mentions, {:array, :binary_id}, default: []
     belongs_to :conversation, Nosilence.Social.Conversation
     belongs_to :author, Nosilence.Accounts.User
     timestamps(type: :utc_datetime_usec, updated_at: false)

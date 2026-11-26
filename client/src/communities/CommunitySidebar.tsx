@@ -122,7 +122,7 @@ export function CommunitySidebar({
                   <ul className="voice-people" aria-label={`In ${c.name}`}>
                     {inside.map((m) => (
                       <li key={m.id} className={speaking.includes(m.id) ? 'speaking' : undefined}>
-                        <Avatar id={m.id} name={m.display_name} size="small" />
+                        <Avatar id={m.id} name={m.display_name} size="small" avatar={m.avatar} />
                         {m.display_name}
                         {speaking.includes(m.id) && (
                           <span className="visually-hidden"> is speaking</span>

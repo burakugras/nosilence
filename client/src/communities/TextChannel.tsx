@@ -15,6 +15,7 @@ import {
   editMessage,
   listMessages,
   markRead,
+  reactToMessage,
   sendMessage,
   type Message,
   type ReadPosition,
@@ -22,9 +23,14 @@ import {
 import { FormMessage } from '../components/Field'
 import { formatWait, useCountdown, withoutWait } from '../components/useCountdown'
 import type { CommunityLive } from '../gateway/useCommunityLive'
-import { merge, reconcile, type History } from './messageHistory'
+import { merge, reconcile, withReactions, type History } from './messageHistory'
 import { MAX_MESSAGE, messageError } from '../validation'
 import { Avatar } from '../ui/Avatar'
+import { EmojiPicker } from '../ui/EmojiPicker'
+import { Icon } from '../ui/Icon'
+import { Popover } from '../ui/Popover'
+import { mentionsIn, splitMentions, suggestions, typingMention, type Mentionable } from './mentions'
+import { applyReaction, QUICK_REACTIONS } from './reactions'
 
 /** Messages by the same person within this time are shown as one group. */
 const GROUP_MS = 5 * 60 * 1000
@@ -69,6 +75,7 @@ export type MessageApi = {
   edit: typeof editMessage
   remove: typeof deleteMessage
   markRead: typeof markRead
+  react: typeof reactToMessage
 }
 
 const CHANNEL_API: MessageApi = {
@@ -77,6 +84,7 @@ const CHANNEL_API: MessageApi = {
   edit: editMessage,
   remove: deleteMessage,
   markRead,
+  react: reactToMessage,
 }
 
 type Props = {
@@ -101,6 +109,10 @@ type Props = {
   live: Pick<CommunityLive, 'generation' | 'subscribe'>
   /** How many messages here the user has not seen yet (for the channel list). */
   onUnreadChange?: (count: number) => void
+  /** Who can be mentioned with @username here (ADR 0017). */
+  people?: Mentionable[]
+  /** Moderators and owners may mention @everyone and @here. */
+  canMentionEveryone?: boolean
 }
 
 export function TextChannel({
@@ -117,9 +129,16 @@ export function TextChannel({
   canDeleteAny,
   live,
   onUnreadChange,
+  people = [],
+  canMentionEveryone = false,
 }: Props) {
   const [history, setHistory] = useState<History>()
   const [text, setText] = useState('')
+  // The @word being typed and the highlighted suggestion (ADR 0017).
+  const [typing, setTyping] = useState<{ start: number; query: string; index: number } | null>(null)
+  const composer = useRef<HTMLTextAreaElement>(null)
+  // Where the reaction picker is open: the message and the button it hangs on.
+  const [picking, setPicking] = useState<{ id: string; anchor: HTMLElement } | null>(null)
   const [sending, setSending] = useState(false)
   const [message, setMessage] = useState<string>()
   const { generation, subscribe } = live
@@ -284,7 +303,24 @@ export function TextChannel({
           if (event.message.author?.id !== currentUserId) incoming.current.push(event.message.id)
         }
         if (event.type === 'message_updated' && event.message.channel_id === channel.id)
-          update((ms) => ms.map((m) => (m.id === event.message.id ? event.message : m)))
+          update((ms) =>
+            ms.map((m) => (m.id === event.message.id ? withReactions(event.message, m) : m)),
+          )
+        if (event.type === 'reaction_changed' && event.channel_id === channel.id)
+          update((ms) =>
+            ms.map((m) =>
+              m.id === event.message_id
+                ? {
+                    ...m,
+                    reactions: applyReaction(m.reactions ?? [], {
+                      emoji: event.emoji,
+                      added: event.added,
+                      mine: event.user_id === currentUserId,
+                    }),
+                  }
+                : m,
+            ),
+          )
         if (event.type === 'message_deleted' && event.channel_id === channel.id)
           update((ms) => ms.filter((m) => m.id !== event.id))
         // A deleted account: its messages go, or stay as from "Deleted user".
@@ -377,7 +413,11 @@ export function TextChannel({
     setSending(true)
     setMessage(undefined)
     try {
-      const sent = await api.send(channel.id, text.trim())
+      const sent = await api.send(
+        channel.id,
+        text.trim(),
+        mentionsIn(text, people, canMentionEveryone),
+      )
       // Your own message always brings you to the end.
       scrollToEnd.current = true
       update((ms) => merge(ms, [sent]))
@@ -397,13 +437,84 @@ export function TextChannel({
     }
   }
 
+  // Everyone but the writer.
+  const suggested = typing
+    ? suggestions(
+        people.filter((p) => p.id !== currentUserId),
+        typing.query,
+        canMentionEveryone,
+      )
+    : []
+
+  /** Follows the @word before the caret. */
+  function onComposerChange(value: string, caret: number) {
+    setText(value)
+    const found = typingMention(value, caret)
+    setTyping(found && { ...found, index: 0 })
+  }
+
+  /** Puts "@username " in place of the @word being typed. */
+  function pickSuggestion(insert: string) {
+    if (!typing) return
+    const end = typing.start + 1 + typing.query.length
+    const next = `${text.slice(0, typing.start)}@${insert} ${text.slice(end)}`
+    setText(next)
+    setTyping(null)
+    const caret = typing.start + insert.length + 2
+    requestAnimationFrame(() => composer.current?.setSelectionRange(caret, caret))
+  }
+
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (typing && suggested.length > 0) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        const step = event.key === 'ArrowDown' ? 1 : -1
+        setTyping({
+          ...typing,
+          index: (typing.index + step + suggested.length) % suggested.length,
+        })
+        return
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault()
+        pickSuggestion(suggested[typing.index]?.insert ?? suggested[0].insert)
+        return
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setTyping(null)
+        return
+      }
+    }
     // Enter sends; Shift+Enter starts a new line.
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault()
       void send()
     }
   }
+
+  /** Puts or takes back the user's reaction; shown at once, undone if the server refuses. */
+  async function toggleReaction(m: Message, emoji: string) {
+    const mine = m.reactions?.find((r) => r.emoji === emoji)?.me ?? false
+    const change = (added: boolean) =>
+      update((ms) =>
+        ms.map((x) =>
+          x.id === m.id
+            ? { ...x, reactions: applyReaction(x.reactions ?? [], { emoji, added, mine: true }) }
+            : x,
+        ),
+      )
+    change(!mine)
+    try {
+      await api.react(m.id, emoji, !mine)
+    } catch (e) {
+      change(mine)
+      setMessage(e instanceof ApiError ? e.message : 'Could not save the reaction.')
+    }
+  }
+
+  // Usernames of the people each message mentions, for highlighting.
+  const usernames = new Map(people.flatMap((p) => (p.username ? [[p.id, p.username]] : [])))
 
   async function remove(m: Message) {
     if (!window.confirm('Delete this message?')) return
@@ -451,6 +562,9 @@ export function TextChannel({
                 m.id !== firstUnseenId &&
                 new Date(m.inserted_at).getTime() - new Date(prev.inserted_at).getTime() < GROUP_MS
               const name = m.author?.display_name ?? 'Deleted user'
+              const mentionsMe =
+                m.author?.id !== currentUserId &&
+                (!!m.mention || (m.mentions ?? []).includes(currentUserId))
               return (
                 <li
                   key={m.id}
@@ -460,6 +574,7 @@ export function TextChannel({
                       !grouped && 'grouped-start',
                       m.id === firstUnseenId && 'first-unseen',
                       unseenIds.includes(m.id) && 'unseen',
+                      mentionsMe && 'mentions-me',
                     ]
                       .filter(Boolean)
                       .join(' ') || undefined
@@ -474,7 +589,12 @@ export function TextChannel({
                         })}
                       </time>
                     ) : (
-                      <Avatar id={m.author?.id ?? 'deleted'} name={name} size="large" />
+                      <Avatar
+                        id={m.author?.id ?? 'deleted'}
+                        name={name}
+                        size="large"
+                        avatar={m.author?.avatar}
+                      />
                     )}
                   </div>
                   <div className="body">
@@ -485,6 +605,15 @@ export function TextChannel({
                       </div>
                     )}
                     <div className="message-actions">
+                      <button
+                        type="button"
+                        className="link-button"
+                        aria-label="Add reaction"
+                        aria-haspopup="dialog"
+                        onClick={(e) => setPicking({ id: m.id, anchor: e.currentTarget })}
+                      >
+                        React
+                      </button>
                       {m.author?.id === currentUserId &&
                         editingId !== m.id &&
                         (m.edits_left ?? 1) > 0 && (
@@ -510,20 +639,52 @@ export function TextChannel({
                     </div>
                     {editingId === m.id ? (
                       <EditBox
-                        edit={api.edit}
+                        edit={(id, value) =>
+                          api.edit(id, value, mentionsIn(value, people, canMentionEveryone))
+                        }
                         message={m}
                         onDone={(edited) => {
                           if (edited)
-                            update((ms) => ms.map((x) => (x.id === edited.id ? edited : x)))
+                            update((ms) =>
+                              ms.map((x) => (x.id === edited.id ? withReactions(edited, x) : x)),
+                            )
                           setEditingId(undefined)
                         }}
                       />
                     ) : (
                       /* Rendered as text, never as HTML. */
                       <p className="message-text">
-                        {m.text}
+                        {splitMentions(
+                          m.text,
+                          (m.mentions ?? []).flatMap((id) => usernames.get(id) ?? []),
+                          m.mention,
+                        ).map((part, k) =>
+                          part.mention ? (
+                            <span key={k} className="mention">
+                              {part.text}
+                            </span>
+                          ) : (
+                            part.text
+                          ),
+                        )}
                         {m.edited_at && <span className="edited"> (edited)</span>}
                       </p>
+                    )}
+                    {(m.reactions?.length ?? 0) > 0 && (
+                      <div className="reactions" aria-label="Reactions">
+                        {m.reactions!.map((r) => (
+                          <button
+                            key={r.emoji}
+                            type="button"
+                            className={r.me ? 'reaction mine' : 'reaction'}
+                            aria-pressed={r.me}
+                            aria-label={`${r.emoji} ${r.count}${r.me ? ', including you' : ''}`}
+                            onClick={() => void toggleReaction(m, r.emoji)}
+                          >
+                            <span aria-hidden="true">{r.emoji}</span> {r.count}
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </li>
@@ -540,15 +701,56 @@ export function TextChannel({
           )}
         </div>
       )}
+      {picking && (
+        <Popover
+          anchor={picking.anchor}
+          label="Add reaction"
+          className="reaction-popover"
+          onClose={() => setPicking(null)}
+        >
+          <ReactionChoices
+            onPick={(emoji) => {
+              const m = messages?.find((x) => x.id === picking.id)
+              setPicking(null)
+              // Picking one already there takes it back only from its own button.
+              if (m && !m.reactions?.find((r) => r.emoji === emoji)?.me)
+                void toggleReaction(m, emoji)
+            }}
+          />
+        </Popover>
+      )}
       <form className="composer" onSubmit={(e) => void send(e)} aria-label="Send a message">
+        {typing && suggested.length > 0 && (
+          <ul className="mention-suggestions" role="listbox" aria-label="Mention someone">
+            {suggested.map((s, i) => (
+              <li
+                key={s.key}
+                role="option"
+                aria-selected={i === typing.index}
+                // mousedown: keep the focus in the text box.
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  pickSuggestion(s.insert)
+                }}
+              >
+                <strong>{s.label}</strong>
+                {s.detail && <span className="muted">{s.detail}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
         <textarea
+          ref={composer}
           aria-label={`Message ${composerName}`}
           placeholder={`Message ${composerName}`}
           value={text}
           maxLength={MAX_MESSAGE}
           rows={1}
-          onChange={(e) => setText(e.target.value)}
+          aria-autocomplete="list"
+          aria-expanded={!!typing && suggested.length > 0}
+          onChange={(e) => onComposerChange(e.target.value, e.target.selectionStart)}
           onKeyDown={onKeyDown}
+          onBlur={() => setTyping(null)}
         />
         <button type="submit" disabled={sending || wait.secondsLeft > 0}>
           Send
@@ -566,6 +768,37 @@ export function TextChannel({
   )
 }
 
+/** The quick reactions, and every emoji behind "More". */
+function ReactionChoices({ onPick }: { onPick: (emoji: string) => void }) {
+  const [all, setAll] = useState(false)
+  return (
+    <div className="reaction-choices">
+      <div className="quick-reactions">
+        {QUICK_REACTIONS.map((emoji) => (
+          <button
+            key={emoji}
+            type="button"
+            aria-label={`React with ${emoji}`}
+            onClick={() => onPick(emoji)}
+          >
+            {emoji}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="More emoji"
+          aria-expanded={all}
+          onClick={() => setAll((a) => !a)}
+        >
+          <Icon name="plus" />
+        </button>
+      </div>
+      {all && <EmojiPicker onPick={onPick} />}
+    </div>
+  )
+}
+
 /** Edits the user's own message in place: Enter saves, Escape cancels. */
 function EditBox({
   message,
@@ -573,7 +806,7 @@ function EditBox({
   onDone,
 }: {
   message: Message
-  edit: MessageApi['edit']
+  edit: (id: string, text: string) => Promise<Message>
   onDone: (edited?: Message) => void
 }) {
   const [text, setText] = useState(message.text)

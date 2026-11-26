@@ -163,4 +163,56 @@ defmodule NosilenceWeb.Gateway.CommunityChannelTest do
     assert_push "removed", %{}
     assert_receive {:DOWN, ^monitor, _, _, _}
   end
+
+  describe "profile and status in presence (ADR 0017)" do
+    test "picture version, status, idle and live changes", ctx do
+      {:ok, _} = Nosilence.Profiles.set_status(ctx.member, %{"status" => "dnd", "text" => "Busy"})
+      socket = join_community(ctx.member, ctx.community)
+      member_id = ctx.member.id
+
+      assert_broadcast "presence_diff", %{
+        joins: %{
+          ^member_id => %{
+            metas: [%{status: "dnd", status_text: "Busy", avatar: nil, idle: false}]
+          }
+        }
+      }
+
+      ref = push(socket, "activity", %{"idle" => true})
+      assert_reply ref, :ok
+      assert_broadcast "presence_diff", %{joins: %{^member_id => %{metas: [%{idle: true}]}}}
+
+      # A change made elsewhere (another device) reaches this connection.
+      member = Nosilence.Repo.get!(Nosilence.Accounts.User, member_id)
+      {:ok, _} = Nosilence.Profiles.set_avatar(member, Nosilence.WebpFixtures.lossless())
+      assert_broadcast "presence_diff", %{joins: %{^member_id => %{metas: [%{avatar: 1}]}}}
+
+      ref = push(socket, "activity", %{"idle" => "yes"})
+      assert_reply ref, :error
+    end
+
+    test "invisible people are not online; in voice they show as offline", ctx do
+      {:ok, _} = Nosilence.Profiles.set_status(ctx.member, %{"status" => "invisible"})
+      socket = join_community(ctx.member, ctx.community)
+      member_id = ctx.member.id
+      _ = :sys.get_state(socket.channel_pid)
+      refute Map.has_key?(NosilenceWeb.Gateway.Presence.list(socket), member_id)
+
+      ref = push(socket, "voice_join", %{"channel_id" => ctx.channel.id})
+      assert_reply ref, :ok
+
+      assert_broadcast "presence_diff", %{
+        joins: %{^member_id => %{metas: [%{status: "offline", status_text: nil}]}}
+      }
+
+      ref = push(socket, "voice_leave", %{})
+      assert_reply ref, :ok
+      assert_broadcast "presence_diff", %{leaves: %{^member_id => _}}
+
+      # Becoming visible again shows them at once.
+      member = Nosilence.Repo.get!(Nosilence.Accounts.User, member_id)
+      {:ok, _} = Nosilence.Profiles.set_status(member, %{"status" => "online"})
+      assert_broadcast "presence_diff", %{joins: %{^member_id => %{metas: [%{status: "online"}]}}}
+    end
+  end
 end

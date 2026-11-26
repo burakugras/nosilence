@@ -98,14 +98,26 @@ config :nosilence, Nosilence.RateLimit,
     repeat_window: 5 * 60_000
   ],
   # friend requests per user (ADR 0015): 20 an hour, then an hour's pause
-  friend_request: [limit: 20, window: 60 * 60_000, penalty: 60 * 60_000]
+  friend_request: [limit: 20, window: 60 * 60_000, penalty: 60 * 60_000],
+  # profile picture and status changes per user (ADR 0017)
+  profile: [limit: 30, window: 60 * 60_000],
+  # reactions added or removed per user (ADR 0017)
+  reaction: [limit: 30, window: 10_000, penalty: 30_000]
 
 # Text messages (limits are configuration, see docs/ROADMAP.md rule 6).
 config :nosilence, Nosilence.Messaging, max_message_length: 2000, page_size: 50
 
 # Never write secrets or message content to the logs: these request parameters
 # show as [FILTERED].
-config :phoenix, :filter_parameters, ["password", "token", "secret", "code", "state", "text"]
+config :phoenix, :filter_parameters, [
+  "password",
+  "token",
+  "secret",
+  "code",
+  "state",
+  "text",
+  "image"
+]
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

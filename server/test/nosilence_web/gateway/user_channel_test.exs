@@ -70,4 +70,17 @@ defmodule NosilenceWeb.Gateway.UserChannelTest do
     {:ok, _} = Messaging.send_message(ctx.owner, ctx.text_channel.id, "two")
     assert_push "notify", %{channel_name: "news", text: "two"}
   end
+
+  test "notifications say whether the user was mentioned (ADR 0017)", ctx do
+    join_own(ctx.member)
+    ch = ctx.text_channel.id
+    {:ok, _} = Messaging.send_message(ctx.owner, ch, "plain")
+    assert_push "notify", %{text: "plain", mentioned: false}
+
+    {:ok, _} = Messaging.send_message(ctx.owner, ch, "hi", %{"mentions" => [ctx.member.id]})
+    assert_push "notify", %{text: "hi", mentioned: true}
+
+    {:ok, _} = Messaging.send_message(ctx.owner, ch, "all", %{"mention" => "everyone"})
+    assert_push "notify", %{text: "all", mentioned: true}
+  end
 end

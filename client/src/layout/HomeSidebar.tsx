@@ -48,7 +48,12 @@ export function HomeSidebar({ path, currentUserId }: { path: string; currentUser
                 {c.kind === 'group' || !other ? (
                   <Avatar id={c.id} name={String(c.members.length)} size="small" />
                 ) : (
-                  <Avatar id={other.id} name={other.display_name} size="small" />
+                  <Avatar
+                    id={other.id}
+                    name={other.display_name}
+                    size="small"
+                    avatar={other.avatar}
+                  />
                 )}
                 <span className="name">{title}</span>
                 {c.unread > 0 && (

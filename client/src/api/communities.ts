@@ -17,6 +17,8 @@ export type Member = {
   user_id: string
   display_name: string
   username?: string | null
+  /** Profile picture version (ADR 0017), or null. */
+  avatar?: number | null
   role: Role
 }
 export type Invite = { id: string; expires_at: string; max_uses: number | null; uses: number }

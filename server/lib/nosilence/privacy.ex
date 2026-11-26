@@ -107,9 +107,19 @@ defmodule Nosilence.Privacy do
       about:
         "Your Nosilence data. Voice is end-to-end encrypted and never stored, so there is none here.",
       account: Accounts.export_account(user),
+      profile: %{
+        picture: Nosilence.Profiles.avatar_export(user),
+        status: user.status,
+        status_text: user.status_text,
+        status_expires_at: user.status_expires_at
+      },
       memberships: Communities.memberships_of(user),
       messages: Messaging.messages_by(user),
       conversation_messages: Nosilence.Social.messages_by(user),
+      reactions: %{
+        channel_messages: Nosilence.Reactions.by_user(:channel, user.id),
+        conversation_messages: Nosilence.Reactions.by_user(:conversation, user.id)
+      },
       friends: Nosilence.Social.list_friends(user),
       read_positions: Messaging.read_states_of(user),
       invites_created: Communities.invites_created_by(user),

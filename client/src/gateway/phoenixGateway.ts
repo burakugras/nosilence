@@ -3,6 +3,8 @@ import { Presence, Socket } from 'phoenix'
 import { fetchSocketTicket } from '../api/messages'
 import { ApiError } from '../api/http'
 import { socketUrl } from '../platform'
+import { statusOf, type PresenceMeta } from '../presence/status'
+import { rememberAvatars } from '../ui/avatars'
 import type { ConnectCommunity, OnlineMember, OpenVoiceTopic } from './types'
 
 // Retry quickly at first so a short network drop recovers within the 3 s target.
@@ -48,6 +50,32 @@ function releaseSocket() {
   }
 }
 
+// Idle (ADR 0017): reported on every community topic this app has joined.
+let idle = false
+const communityChannels = new Set<ReturnType<Socket['channel']>>()
+
+/** No input for a while (`presence/idle.ts`), or back again. */
+export function setIdle(value: boolean) {
+  if (value === idle) return
+  idle = value
+  communityChannels.forEach((ch) => ch.push('activity', { idle }))
+}
+
+/** One presence entry per person, from all their connections. */
+export function toOnlineMember(id: string, metas: PresenceMeta[]): OnlineMember {
+  const first = metas[0] ?? {}
+  return {
+    id,
+    display_name: String(first.display_name ?? ''),
+    // Several tabs or devices: any one of them in voice counts.
+    voice_channel_id: metas.map((m) => m.voice_channel_id).find(Boolean) ?? null,
+    avatar: first.avatar ?? null,
+    status: statusOf(metas),
+    status_text: first.status_text ?? null,
+    status_expires_at: first.status_expires_at ?? null,
+  }
+}
+
 /** One shared WebSocket; one channel per open community page. */
 export const connectCommunity: ConnectCommunity = (communityId, listener) => {
   let closed = false
@@ -59,17 +87,13 @@ export const connectCommunity: ConnectCommunity = (communityId, listener) => {
     const ch = s.channel(`community:${communityId}`)
     channel = ch
     const presence = new Presence(ch)
-    presence.onSync(() =>
-      listener.presence(
-        presence.list<OnlineMember>((id, { metas }) => ({
-          id,
-          display_name: String(metas[0]?.display_name ?? ''),
-          // Several tabs or devices: any one of them in voice counts.
-          voice_channel_id:
-            (metas.map((m) => m.voice_channel_id).find(Boolean) as string | undefined) ?? null,
-        })),
-      ),
-    )
+    presence.onSync(() => {
+      const members = presence.list<OnlineMember>((id, { metas }) =>
+        toOnlineMember(id, metas as PresenceMeta[]),
+      )
+      rememberAvatars(members)
+      listener.presence(members)
+    })
     ch.on('message_created', (message) => listener.event({ type: 'message_created', message }))
     ch.on('message_deleted', (p) => listener.event({ type: 'message_deleted', ...p }))
     ch.on('member_joined', (p) => listener.event({ type: 'member_joined', ...p }))
@@ -80,11 +104,14 @@ export const connectCommunity: ConnectCommunity = (communityId, listener) => {
     ch.on('member_updated', (p) => listener.event({ type: 'member_updated', ...p }))
     ch.on('ownership_changed', () => listener.event({ type: 'ownership_changed' }))
     ch.on('message_updated', (message) => listener.event({ type: 'message_updated', message }))
+    ch.on('reaction_changed', (p) => listener.event({ type: 'reaction_changed', ...p }))
     ch.on('removed', () => listener.removed())
+    communityChannels.add(ch)
     ch.join()
       .receive('ok', () => {
-        // After a reconnect the server has forgotten our voice channel; tell it again.
+        // After a reconnect the server has forgotten our voice channel and idle; tell it again.
         if (voiceChannelId) ch.push('voice_join', { channel_id: voiceChannelId })
+        if (idle) ch.push('activity', { idle })
         listener.joined()
       })
       .receive('error', () => listener.removed())
@@ -99,6 +126,7 @@ export const connectCommunity: ConnectCommunity = (communityId, listener) => {
       if (closed) return
       closed = true
       if (channel) {
+        communityChannels.delete(channel)
         channel.leave()
         releaseSocket()
       }
@@ -106,7 +134,7 @@ export const connectCommunity: ConnectCommunity = (communityId, listener) => {
   }
 }
 
-/** Events on the user's own topic (ADR 0014, ADR 0015). */
+/** Events on the user's own topic (ADR 0014, ADR 0015, ADR 0017). */
 const USER_EVENTS = [
   'notify',
   'friends_changed',
@@ -114,6 +142,8 @@ const USER_EVENTS = [
   'dm_created',
   'dm_updated',
   'dm_deleted',
+  'dm_reaction_changed',
+  'profile_changed',
 ] as const
 export type UserEventName = (typeof USER_EVENTS)[number] | 'joined'
 
