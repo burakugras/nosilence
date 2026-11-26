@@ -14,7 +14,8 @@ defmodule NosilenceWeb.MessageController do
              Map.take(params, ["before"])
            ) do
       json(conn, %{
-        messages: Enum.map(page.messages, &Messaging.to_payload/1),
+        messages:
+          Enum.map(page.messages, &Messaging.to_payload(&1, Map.get(page.reactions, &1.id, []))),
         has_more: page.has_more,
         read: page.read
       })
@@ -23,13 +24,19 @@ defmodule NosilenceWeb.MessageController do
 
   def create(conn, %{"channel_id" => channel_id} = params) do
     with {:ok, message} <-
-           Messaging.send_message(conn.assigns.current_user, channel_id, params["text"]) do
-      conn |> put_status(:created) |> json(%{message: Messaging.to_payload(message)})
+           Messaging.send_message(
+             conn.assigns.current_user,
+             channel_id,
+             params["text"],
+             mentions(params)
+           ) do
+      conn |> put_status(:created) |> json(%{message: Messaging.to_payload(message, [])})
     end
   end
 
   def update(conn, %{"id" => id} = params) do
-    with {:ok, message} <- Messaging.edit_message(conn.assigns.current_user, id, params["text"]),
+    with {:ok, message} <-
+           Messaging.edit_message(conn.assigns.current_user, id, params["text"], mentions(params)),
          do: json(conn, %{message: Messaging.to_payload(message)})
   end
 
@@ -42,4 +49,16 @@ defmodule NosilenceWeb.MessageController do
     with :ok <- Messaging.delete_message(conn.assigns.current_user, id),
          do: send_resp(conn, :no_content, "")
   end
+
+  def add_reaction(conn, %{"id" => id, "emoji" => emoji}) do
+    with :ok <- Messaging.react(conn.assigns.current_user, id, emoji, true),
+         do: send_resp(conn, :no_content, "")
+  end
+
+  def remove_reaction(conn, %{"id" => id, "emoji" => emoji}) do
+    with :ok <- Messaging.react(conn.assigns.current_user, id, emoji, false),
+         do: send_resp(conn, :no_content, "")
+  end
+
+  defp mentions(params), do: Map.take(params, ["mentions", "mention"])
 end

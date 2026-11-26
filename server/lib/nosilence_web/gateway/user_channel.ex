@@ -45,7 +45,11 @@ defmodule NosilenceWeb.Gateway.UserChannel do
           channel_id: message.channel_id,
           channel_name: names.channel_name,
           author_name: message.author.display_name,
-          text: message.text
+          text: message.text,
+          # Named, or everyone/here (ADR 0017); notifications in phase 11b-2 use it.
+          mentioned:
+            socket.assigns.user.id in (message[:mentions] || []) or
+              message[:mention] in ["everyone", "here"]
         })
       end
 

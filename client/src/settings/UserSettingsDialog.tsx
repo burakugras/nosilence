@@ -9,6 +9,7 @@ import { SettingsModal, type ModalSection } from '../ui/Modal'
 import { AboutSection } from '../updates/UpdateViews'
 import { useCallState } from '../voice/callState'
 import { VoiceSettingsPanel } from '../voice/VoiceSettingsPanel'
+import { ProfileSection } from './ProfileSection'
 import { closeDialog, openUserSettings, type UserSettingsSection } from './settingsDialog'
 
 /** All of the user's settings in one window (ADR 0016). */
@@ -27,6 +28,7 @@ export function UserSettingsDialog({
 }) {
   const { micTrack } = useCallState()
   const sections: ModalSection[] = [
+    { id: 'profile', label: 'Profile' },
     { id: 'voice', label: 'Voice' },
     ...(isDesktop ? [{ id: 'notifications', label: 'Notifications' }] : []),
     { id: 'privacy', label: 'Username and privacy' },
@@ -44,6 +46,7 @@ export function UserSettingsDialog({
       onSection={(id) => openUserSettings(id as UserSettingsSection)}
       onClose={closeDialog}
     >
+      {current === 'profile' && <ProfileSection user={user} onChange={onUserChange} />}
       {current === 'voice' && (
         <>
           <h2>Voice</h2>

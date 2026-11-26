@@ -14,7 +14,7 @@ export function Popover({
   children,
 }: {
   anchor: HTMLElement
-  side?: 'below' | 'left'
+  side?: 'below' | 'above' | 'left'
   label: string
   onClose: () => void
   className?: string
@@ -29,7 +29,7 @@ export function Popover({
     const w = el.offsetWidth
     const h = el.offsetHeight
     let left = side === 'left' ? r.left - w - 8 : r.left
-    let top = side === 'left' ? r.top : r.bottom + 6
+    let top = side === 'left' ? r.top : side === 'above' ? r.top - h - 6 : r.bottom + 6
     left = Math.max(8, Math.min(left, window.innerWidth - w - 8))
     top = Math.max(8, Math.min(top, window.innerHeight - h - 8))
     el.style.left = `${left}px`

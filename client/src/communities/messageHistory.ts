@@ -9,12 +9,19 @@ const byTime = (a: Message, b: Message) =>
   a.inserted_at.localeCompare(b.inserted_at) ||
   a.id.localeCompare(b.id)
 
-/** Adds messages that are not there yet and keeps the list in time order. */
+/**
+ * Adds messages that are not there yet and keeps the list in time order. Live
+ * events carry no reactions (ADR 0017): the ones already shown are kept.
+ */
 export function merge(current: Message[], incoming: Message[]): Message[] {
   const byId = new Map(current.map((m) => [m.id, m]))
-  for (const m of incoming) byId.set(m.id, m)
+  for (const m of incoming) byId.set(m.id, withReactions(m, byId.get(m.id)))
   return [...byId.values()].sort(byTime)
 }
+
+/** `next` with the reactions of `previous` when it carries none. */
+export const withReactions = (next: Message, previous?: Message): Message =>
+  next.reactions == null ? { ...next, reactions: previous?.reactions ?? [] } : next
 
 /**
  * Combines what we have with a freshly loaded latest page (after a reconnect).

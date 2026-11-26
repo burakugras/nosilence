@@ -90,7 +90,8 @@ desktop notifications.
 Split in two (Burak, 2026-11-26):
 - **11a:** usernames, friends, blocking, direct and group messages (ADR 0015).
 - **11b:** profile picture and status, mentions and reactions, and the notification
-  work deferred from phase 10.
+  work deferred from phase 10. Split again (Burak, 2026-11-26): **11b-1** profile
+  picture, status, mentions and reactions (ADR 0017); **11b-2** the notification work.
 - Between them (Burak, 2026-11-26): a new layout with design tokens and dark and light
   themes (ADR 0016), so 11b's screens are built once.
 **Done:** people can find each other and talk outside communities.
@@ -125,8 +126,11 @@ Postponed on purpose. Reviewed at the start of every phase.
 | Re-check ignored Rust advisories (`.cargo/audit.toml`) when openmls or Tauri are updated | Phase 7a | Every dependency update |
 | Run tools/netlab on a schedule (nightly) on a dedicated machine | Phase 7b | After the MVP |
 | Production webhook URL in the LiveKit configuration | Phase 7b | Phase 12 |
-| Offer the LiveKit fixes upstream (audio loss proxying in the server, the 2 s wait in livekit-client); then drop `infra/livekit/` and `client/patches/` | Phase 9 | When LiveKit releases them (production needs the image or a fixed release by Phase 12) |
+| Offer the LiveKit fixes upstream (audio loss proxying in the server: a pull request with a test; the 2 s wait in livekit-client: an issue first, as their rules ask), after reading and signing LiveKit's contributor licence agreement; then drop `infra/livekit/` and `client/patches/` once LiveKit releases them | Phase 9 | Phase 12, right before the release (Burak, 2026-11-26); until then we run our own image and patch |
 | Global push-to-talk through a keyboard hook (keys pass through, more buttons) once the installer is signed | Phase 9 | After Phase 12 |
 | Notifications in the web app (browser notifications), and clicking a notification to open the channel | Phase 10 | Phase 11 |
 | Muting single communities or channels for notifications | Phase 10 | Phase 11 |
 | Opening invite links straight in the desktop app (a `nosilence://` link handler); for now the link is pasted on the communities page | Phase 10 | Phase 11 |
+| Friends' status (online, idle, do not disturb) on the friends page and in conversations; today status shows in communities | Phase 11b-1 | Phase 11b-2 |
+| Who reacted (names on a reaction), a count of unread mentions on the rail | Phase 11b-1 | Phase 11b-2 |
+| Community emoji, skin tones and emoji newer than Unicode 12.0 (Windows 10 cannot draw them) | Phase 11b-1 | After the MVP |

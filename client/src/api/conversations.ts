@@ -61,23 +61,29 @@ export const conversationApi: MessageApi = {
     )
     return { ...page, messages: page.messages.map(asMessage) }
   },
-  send: async (id, text) =>
+  // Conversations have no "everyone"/"here": only named people.
+  send: async (id, text, { mentions } = {}) =>
     asMessage(
       (
         await request<{ message: ConversationMessage }>(`/api/conversations/${id}/messages`, {
           method: 'POST',
-          body: { text },
+          body: { text, mentions },
         })
       ).message,
     ),
-  edit: async (messageId, text) =>
+  edit: async (messageId, text, { mentions } = {}) =>
     asMessage(
       (
         await request<{ message: ConversationMessage }>(`/api/conversation-messages/${messageId}`, {
           method: 'PATCH',
-          body: { text },
+          body: { text, mentions },
         })
       ).message,
+    ),
+  react: (messageId, emoji, add) =>
+    request<void>(
+      `/api/conversation-messages/${messageId}/reactions/${encodeURIComponent(emoji)}`,
+      { method: add ? 'PUT' : 'DELETE' },
     ),
   remove: (messageId) =>
     request<void>(`/api/conversation-messages/${messageId}`, { method: 'DELETE' }),

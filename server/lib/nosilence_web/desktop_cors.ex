@@ -30,7 +30,7 @@ defmodule NosilenceWeb.DesktopCors do
 
     if conn.method == "OPTIONS" do
       conn
-      |> put_resp_header("access-control-allow-methods", "GET, POST, DELETE")
+      |> put_resp_header("access-control-allow-methods", "GET, POST, PUT, PATCH, DELETE")
       |> put_resp_header("access-control-allow-headers", "authorization, content-type, accept")
       |> put_resp_header("access-control-max-age", "600")
       |> send_resp(:no_content, "")

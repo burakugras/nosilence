@@ -12,6 +12,18 @@ export type User = {
   friend_requests_from?: 'everyone' | 'communities'
   /** Whether people in shared communities may start a conversation. */
   community_members_can_message?: boolean
+} & Partial<Profile>
+
+/** Status the user chose (ADR 0017); "idle" is never chosen, the app reports it. */
+export type StatusChoice = 'online' | 'dnd' | 'invisible'
+
+/** Profile picture and status, as the server keeps them. */
+export type Profile = {
+  /** Version of the profile picture, or null for none (the initial is shown). */
+  avatar: number | null
+  status: StatusChoice
+  status_text: string | null
+  status_expires_at: string | null
 }
 
 export type Registration = {

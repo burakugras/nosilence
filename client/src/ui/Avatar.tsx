@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { Status } from '../presence/status'
+import { useAvatarSrc } from './avatars'
 
 // Fixed colours, picked by the person's id, so everyone keeps their colour.
 const COLORS = [
@@ -18,27 +20,35 @@ function colorFor(id: string) {
   return COLORS[Math.abs(hash) % COLORS.length]
 }
 
-/** The first letter of the name on a colour; with an online/offline dot if `online` is given. */
+/**
+ * The person's profile picture (ADR 0017), or the first letter of the name on a
+ * colour; with a status dot if `status` is given. Decorative: the name next to
+ * it says who it is.
+ */
 export function Avatar({
   id,
   name,
   size,
-  online,
+  avatar,
+  status,
 }: {
   id: string
   name: string
   size?: 'small' | 'large'
-  online?: boolean
+  /** Picture version, or null/undefined for none. */
+  avatar?: number | null
+  status?: Status
 }) {
+  const src = useAvatarSrc(id, avatar)
   const letter = [...(name.trim() || '?')][0].toLocaleUpperCase()
   return (
     <span
       className={size ? `avatar ${size}` : 'avatar'}
-      style={{ background: colorFor(id) }}
+      style={src ? undefined : { background: colorFor(id) }}
       aria-hidden="true"
     >
-      {letter}
-      {online !== undefined && <span className={online ? 'presence on' : 'presence'} />}
+      {src ? <img src={src} alt="" draggable={false} /> : letter}
+      {status && <span className={`presence ${status}`} />}
     </span>
   )
 }

@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from 'react'
 
 export type UserSettingsSection =
-  'voice' | 'notifications' | 'privacy' | 'appearance' | 'account' | 'about'
+  'profile' | 'voice' | 'notifications' | 'privacy' | 'appearance' | 'account' | 'about'
 
 export type OpenDialog =
   | { kind: 'user'; section: UserSettingsSection }

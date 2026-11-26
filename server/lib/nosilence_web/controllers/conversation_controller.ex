@@ -42,7 +42,8 @@ defmodule NosilenceWeb.ConversationController do
     with {:ok, page} <-
            Social.list_messages(conn.assigns.current_user, id, Map.take(params, ["before"])) do
       json(conn, %{
-        messages: Enum.map(page.messages, &Social.to_payload/1),
+        messages:
+          Enum.map(page.messages, &Social.to_payload(&1, Map.get(page.reactions, &1.id, []))),
         has_more: page.has_more,
         read: page.read
       })
@@ -50,8 +51,9 @@ defmodule NosilenceWeb.ConversationController do
   end
 
   def send_message(conn, %{"id" => id} = params) do
-    with {:ok, message} <- Social.send_message(conn.assigns.current_user, id, params["text"]),
-         do: conn |> put_status(:created) |> json(%{message: Social.to_payload(message)})
+    with {:ok, message} <-
+           Social.send_message(conn.assigns.current_user, id, params["text"], mentions(params)),
+         do: conn |> put_status(:created) |> json(%{message: Social.to_payload(message, [])})
   end
 
   def read(conn, %{"id" => id, "message_id" => message_id}) do
@@ -60,7 +62,8 @@ defmodule NosilenceWeb.ConversationController do
   end
 
   def update_message(conn, %{"message_id" => id} = params) do
-    with {:ok, message} <- Social.edit_message(conn.assigns.current_user, id, params["text"]),
+    with {:ok, message} <-
+           Social.edit_message(conn.assigns.current_user, id, params["text"], mentions(params)),
          do: json(conn, %{message: Social.to_payload(message)})
   end
 
@@ -68,4 +71,16 @@ defmodule NosilenceWeb.ConversationController do
     with :ok <- Social.delete_message(conn.assigns.current_user, id),
          do: send_resp(conn, :no_content, "")
   end
+
+  def add_reaction(conn, %{"message_id" => id, "emoji" => emoji}) do
+    with :ok <- Social.react(conn.assigns.current_user, id, emoji, true),
+         do: send_resp(conn, :no_content, "")
+  end
+
+  def remove_reaction(conn, %{"message_id" => id, "emoji" => emoji}) do
+    with :ok <- Social.react(conn.assigns.current_user, id, emoji, false),
+         do: send_resp(conn, :no_content, "")
+  end
+
+  defp mentions(params), do: Map.take(params, ["mentions"])
 end

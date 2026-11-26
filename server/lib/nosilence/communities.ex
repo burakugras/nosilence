@@ -109,6 +109,7 @@ defmodule Nosilence.Communities do
              user_id: u.id,
              display_name: u.display_name,
              username: u.username,
+             avatar: u.avatar_version,
              role: m.role
            }
        )}

@@ -7,6 +7,7 @@ import { blockUser, requestFriend } from '../api/social'
 import { FormMessage } from '../components/Field'
 import { navigate } from '../router'
 import { openUserSettings } from '../settings/settingsDialog'
+import { liveStatusText, STATUS_LABEL, type Status } from '../presence/status'
 import { Avatar } from '../ui/Avatar'
 import { Icon } from '../ui/Icon'
 import { Popover } from '../ui/Popover'
@@ -18,25 +19,34 @@ import { outranks } from './roles'
  * Clicking someone opens a card with what can be done with them.
  */
 export function MembersColumn() {
-  const { members, online } = useCommunity()
+  const { members, online, presence } = useCommunity()
   const [card, setCard] = useState<{ member: Member; anchor: HTMLElement } | null>(null)
   const on = members.filter((m) => online.has(m.user_id))
   const off = members.filter((m) => !online.has(m.user_id))
 
-  const row = (m: Member, isOnline: boolean) => (
-    <li key={m.user_id}>
-      <button
-        type="button"
-        className={isOnline ? 'member' : 'member offline'}
-        aria-haspopup="dialog"
-        onClick={(e) => setCard({ member: m, anchor: e.currentTarget })}
-      >
-        <Avatar id={m.user_id} name={m.display_name} online={isOnline} />
-        <span className="name">{m.display_name}</span>
-        {m.role !== 'member' && <span className="badge">{m.role}</span>}
-      </button>
-    </li>
-  )
+  const row = (m: Member, isOnline: boolean) => {
+    const p = presence.get(m.user_id)
+    const status: Status = isOnline ? (p?.status ?? 'online') : 'offline'
+    const text = isOnline ? liveStatusText(p?.status_text, p?.status_expires_at) : null
+    return (
+      <li key={m.user_id}>
+        <button
+          type="button"
+          className={isOnline ? 'member' : 'member offline'}
+          aria-haspopup="dialog"
+          aria-label={`${m.display_name}, ${STATUS_LABEL[status]}${text ? `: ${text}` : ''}`}
+          onClick={(e) => setCard({ member: m, anchor: e.currentTarget })}
+        >
+          <Avatar id={m.user_id} name={m.display_name} avatar={m.avatar} status={status} />
+          <span className="name-and-status">
+            <span className="name">{m.display_name}</span>
+            {text && <span className="status-text">{text}</span>}
+          </span>
+          {m.role !== 'member' && <span className="badge">{m.role}</span>}
+        </button>
+      </li>
+    )
+  }
 
   return (
     <aside className="members" aria-label="Members">
@@ -64,7 +74,7 @@ function MemberCard({
   anchor: HTMLElement
   onClose: () => void
 }) {
-  const { community, myRole, currentUserId, live, online } = useCommunity()
+  const { community, myRole, currentUserId, live, online, presence } = useCommunity()
   const [error, setError] = useState<string>()
   const [done, setDone] = useState<string>()
   const self = member.user_id === currentUserId
@@ -82,20 +92,28 @@ function MemberCard({
     }
   }
 
+  const p = presence.get(member.user_id)
+  const status: Status = online.has(member.user_id) ? (p?.status ?? 'online') : 'offline'
+  const statusText =
+    status === 'offline' ? null : liveStatusText(p?.status_text, p?.status_expires_at)
+
   return (
     <Popover anchor={anchor} side="left" label={member.display_name} onClose={onClose}>
       <div className="card-head">
         <Avatar
           id={member.user_id}
           name={member.display_name}
-          online={online.has(member.user_id)}
+          avatar={member.avatar}
+          status={status}
         />
         <div>
           <strong>{member.display_name}</strong>
           {member.username && <div className="muted">@{member.username}</div>}
+          <div className="muted">{STATUS_LABEL[status]}</div>
           {member.role !== 'member' && <span className="badge">{member.role}</span>}
         </div>
       </div>
+      {statusText && <p className="card-status">{statusText}</p>}
       <div className="menu">
         {self ? (
           <button

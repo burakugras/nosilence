@@ -22,7 +22,7 @@ defmodule Nosilence.Social do
 
   alias Nosilence.Accounts.User
   alias Nosilence.Communities.Membership
-  alias Nosilence.{Events, Messaging, Repo}
+  alias Nosilence.{Events, Messaging, Reactions, Repo}
 
   alias Nosilence.Social.{
     Block,
@@ -354,23 +354,36 @@ defmodule Nosilence.Social do
       rows =
         Repo.all(from m in query, order_by: [desc: m.seq], limit: ^(size + 1), preload: :author)
 
+      messages = rows |> Enum.take(size) |> Enum.reverse()
+
       {:ok,
        %{
-         messages: rows |> Enum.take(size) |> Enum.reverse(),
+         messages: messages,
          has_more: length(rows) > size,
-         read: read_position(c.id, user.id)
+         read: read_position(c.id, user.id),
+         reactions: Reactions.summary(:conversation, Enum.map(messages, & &1.id), user.id)
        }}
     end
   end
 
-  def send_message(%User{} = user, conversation_id, text) do
+  @doc """
+  Sends a message to a conversation. `mentions` holds `"mentions"`, user ids
+  picked by the author's app (ADR 0017); people not in the conversation are dropped.
+  """
+  def send_message(%User{} = user, conversation_id, text, mentions \\ %{}) do
     with {:ok, c} <- member_of(user, conversation_id),
          :ok <- may_still_write(user, c),
          {:ok, text} <- Messaging.validate_text(text),
+         {:ok, ids} <- conversation_mentions(c.id, mentions),
          :ok <- message_allowed(user) do
       message =
         Repo.insert!(
-          %ConversationMessage{conversation_id: c.id, author_id: user.id, content: text},
+          %ConversationMessage{
+            conversation_id: c.id,
+            author_id: user.id,
+            content: text,
+            mentions: ids
+          },
           log: false
         )
         |> Map.put(:author, user)
@@ -382,13 +395,14 @@ defmodule Nosilence.Social do
     end
   end
 
-  def edit_message(%User{} = user, message_id, text) do
+  def edit_message(%User{} = user, message_id, text, mentions \\ %{}) do
     with {:ok, id} <- Ecto.UUID.cast(message_id),
          %ConversationMessage{author_id: author} = m when author == user.id <-
            Repo.get(ConversationMessage, id),
          {:ok, _} <- member_of(user, m.conversation_id),
          {:ok, text} <- Messaging.validate_text(text),
-         {1, [m]} <- count_edit(m.id, text) do
+         {:ok, ids} <- conversation_mentions(m.conversation_id, mentions),
+         {1, [m]} <- count_edit(m.id, text, ids) do
       m = Map.put(m, :author, user)
       tell_members(m.conversation_id, "dm_updated", to_payload(m))
       {:ok, m}
@@ -434,7 +448,37 @@ defmodule Nosilence.Social do
     end
   end
 
-  def to_payload(%ConversationMessage{} = m) do
+  @doc """
+  Adds (`add?` true) or removes the user's reaction on a conversation message
+  and tells the members. Writing rules apply (a blocked direct conversation
+  takes no reactions either).
+  """
+  def react(%User{} = user, message_id, emoji, add?) do
+    with {:ok, id} <- Ecto.UUID.cast(message_id),
+         %ConversationMessage{} = m <- Repo.get(ConversationMessage, id),
+         {:ok, c} <- member_of(user, m.conversation_id),
+         :ok <- may_still_write(user, c),
+         {:ok, changed?} <- Reactions.set(:conversation, m.id, user.id, emoji, add?) do
+      if changed? do
+        tell_members(c.id, "dm_reaction_changed", %{
+          message_id: m.id,
+          conversation_id: c.id,
+          emoji: emoji,
+          user_id: user.id,
+          added: add?
+        })
+      end
+
+      :ok
+    else
+      {:error, _} = error -> error
+      {:error, _, _, _} = error -> error
+      _ -> {:error, :not_found}
+    end
+  end
+
+  @doc "The client-facing shape of a conversation message (`reactions` as in `Messaging.to_payload/2`)."
+  def to_payload(%ConversationMessage{} = m, reactions \\ nil) do
     %{
       id: m.id,
       seq: m.seq,
@@ -442,10 +486,21 @@ defmodule Nosilence.Social do
       text: m.content,
       edited_at: m.edited_at,
       edits_left: Messaging.max_edits() - m.edit_count,
-      author: m.author && %{id: m.author.id, display_name: m.author.display_name},
+      author: m.author && Messaging.author(m.author),
+      mentions: m.mentions,
+      reactions: reactions,
       inserted_at: m.inserted_at
     }
   end
+
+  defp conversation_mentions(conversation_id, params) when is_map(params) do
+    with {:ok, ids} <- Messaging.mention_ids(params["mentions"]) do
+      members = member_ids_of(conversation_id)
+      {:ok, Enum.filter(ids, &(&1 in members))}
+    end
+  end
+
+  defp conversation_mentions(_conversation_id, _params), do: {:ok, []}
 
   ## Account data (Nosilence.Privacy)
 
@@ -530,6 +585,16 @@ defmodule Nosilence.Social do
     )
   end
 
+  @doc "True if the two people are in a conversation together."
+  def share_conversation?(a_id, b_id) do
+    Repo.exists?(
+      from m1 in ConversationMember,
+        join: m2 in ConversationMember,
+        on: m2.conversation_id == m1.conversation_id,
+        where: m1.user_id == ^a_id and m2.user_id == ^b_id
+    )
+  end
+
   defp friendship(a_id, b_id) do
     {low, high} = order(a_id, b_id)
     Repo.get_by(Friendship, user_low_id: low, user_high_id: high)
@@ -543,7 +608,8 @@ defmodule Nosilence.Social do
   defp notify_friends(user_ids),
     do: Enum.each(user_ids, &Events.to_user(&1, "friends_changed", %{}))
 
-  defp person(%User{} = u), do: %{id: u.id, display_name: u.display_name, username: u.username}
+  defp person(%User{} = u),
+    do: %{id: u.id, display_name: u.display_name, username: u.username, avatar: u.avatar_version}
 
   defp member_of(%User{id: me}, conversation_id) do
     with {:ok, id} <- Ecto.UUID.cast(conversation_id),
@@ -654,14 +720,17 @@ defmodule Nosilence.Social do
     end
   end
 
-  defp count_edit(id, text) do
+  defp count_edit(id, text, mentions) do
     from(m in ConversationMessage,
       where: m.id == ^id and m.edit_count < ^Messaging.max_edits(),
       select: m
     )
     # `log: false`: the query log would print the new text.
     |> Repo.update_all(
-      [set: [content: text, edited_at: DateTime.utc_now()], inc: [edit_count: 1]],
+      [
+        set: [content: text, edited_at: DateTime.utc_now(), mentions: mentions],
+        inc: [edit_count: 1]
+      ],
       log: false
     )
   end

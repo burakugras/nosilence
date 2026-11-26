@@ -7,3 +7,10 @@ path = "**"
 precedence = "closest"
 SPDX-FileCopyrightText = "Nosilence contributors"
 SPDX-License-Identifier = "AGPL-3.0-only"
+
+# The emoji list for reactions, generated from Unicode data (THIRD-PARTY-NOTICES.md).
+[[annotations]]
+path = ["client/src/ui/emojiData.json", "server/priv/emoji.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Unicode, Inc."
+SPDX-License-Identifier = "Unicode-3.0"

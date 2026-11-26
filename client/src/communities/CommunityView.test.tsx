@@ -66,6 +66,7 @@ vi.mock('../api/messages', () => ({
       read: { message_id: 'm1', seq: 2 },
     }),
   markRead: () => Promise.resolve(),
+  reactToMessage: () => Promise.resolve(),
   sendMessage: (_channel: string, text: string) => {
     sent.push(text)
     return Promise.resolve({ ...message('m22', text, 'u1') })
@@ -157,8 +158,24 @@ describe('a community', () => {
 
     act(() =>
       state.listener!.presence([
-        { id: 'u1', display_name: 'Burak', voice_channel_id: null },
-        { id: 'u2', display_name: 'Ayşe', voice_channel_id: VOICE },
+        {
+          id: 'u1',
+          display_name: 'Burak',
+          voice_channel_id: null,
+          avatar: null,
+          status: 'online' as const,
+          status_text: null,
+          status_expires_at: null,
+        },
+        {
+          id: 'u2',
+          display_name: 'Ayşe',
+          voice_channel_id: VOICE,
+          avatar: null,
+          status: 'online' as const,
+          status_text: null,
+          status_expires_at: null,
+        },
       ]),
     )
 

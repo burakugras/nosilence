@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { startIdleWatch } from './presence/idle'
+import { clearMyProfile, setMyProfile } from './presence/myProfile'
 import { useEffect, useState, type ReactNode } from 'react'
 import { CompleteSignupForm, CompleteSignupPage } from './accounts/CompleteSignupPage'
 import { ConfirmPage } from './accounts/ConfirmPage'
@@ -46,6 +48,12 @@ export default function App({ loadUser = currentUser }: Props) {
   // behind the unread badges, and on the desktop notifications for others'
   // messages (ADR 0014). Listeners attach before the topic delivers anything.
   const userId = user?.id
+  // The user's own picture and status (ADR 0017), and idle on the live connections.
+  useEffect(() => {
+    if (user) setMyProfile(user)
+    else clearMyProfile()
+  }, [user])
+  useEffect(() => (userId ? startIdleWatch() : undefined), [userId])
   useEffect(() => (userId ? startMessageNotifications(userId) : undefined), [userId])
   useEffect(() => (userId ? followConversations() : undefined), [userId])
   useEffect(() => (userId ? followCommunities() : undefined), [userId])

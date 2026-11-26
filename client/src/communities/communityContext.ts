@@ -2,6 +2,8 @@
 import { createContext, useContext } from 'react'
 import type { Channel, CommunitySummary, Member, Role } from '../api/communities'
 import type { CommunityLive } from '../gateway/useCommunityLive'
+import type { OnlineMember } from '../gateway/types'
+import type { Mentionable } from './mentions'
 
 /**
  * One open community, shared by its three columns (channels, chat, members):
@@ -15,9 +17,13 @@ export type CommunityView = {
   canModerate: boolean
   currentUserId: string
   live: CommunityLive
-  /** Ids of members connected right now. */
+  /** Ids of members shown as online (connected and not invisible). */
   online: Set<string>
+  /** Presence of members connected right now, by id (status, picture, voice). */
+  presence: Map<string, OnlineMember>
   members: Member[]
+  /** Members who can be mentioned with @username (ADR 0017). */
+  people: Mentionable[]
   /** Unread messages per text channel. */
   unread: Record<string, number>
   /** The text channel on screen. */

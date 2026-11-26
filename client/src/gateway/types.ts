@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Channel } from '../api/communities'
 import type { Message } from '../api/messages'
+import type { Status } from '../presence/status'
 
 /** Someone connected to the community right now. */
 export type OnlineMember = {
@@ -8,6 +9,12 @@ export type OnlineMember = {
   display_name: string
   /** The voice channel they are in, if any. */
   voice_channel_id: string | null
+  /** Profile picture version (ADR 0017), or null. */
+  avatar: number | null
+  /** "offline" for someone invisible who is in a voice channel. */
+  status: Status
+  status_text: string | null
+  status_expires_at: string | null
 }
 
 export type LiveEvent =
@@ -21,6 +28,14 @@ export type LiveEvent =
   | { type: 'member_updated'; user_id: string; role: string }
   | { type: 'ownership_changed' }
   | { type: 'message_updated'; message: Message }
+  | {
+      type: 'reaction_changed'
+      message_id: string
+      channel_id: string
+      emoji: string
+      user_id: string
+      added: boolean
+    }
 
 export type CommunityListener = {
   presence: (members: OnlineMember[]) => void
@@ -74,4 +89,6 @@ export type MessageNotice = {
   channel_name: string
   author_name: string
   text: string
+  /** The user was named, or everyone/here was (ADR 0017). */
+  mentioned?: boolean
 }

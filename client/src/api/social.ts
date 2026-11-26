@@ -3,7 +3,13 @@ import type { User } from './accounts'
 import { request } from './http'
 
 /** Someone on the friends page or in a conversation. */
-export type Person = { id: string; display_name: string; username: string | null }
+export type Person = {
+  id: string
+  display_name: string
+  username: string | null
+  /** Profile picture version (ADR 0017), or null. */
+  avatar?: number | null
+}
 
 export type FriendsList = {
   friends: Person[]

@@ -18,6 +18,9 @@ defmodule Nosilence.Messaging.Message do
     # Set when the author edits the text; the previous text is not kept.
     field :edited_at, :utc_datetime_usec
     field :edit_count, :integer, default: 0
+    # Ids picked by the author's app, and "everyone" or "here" (ADR 0017).
+    field :mentions, {:array, :binary_id}, default: []
+    field :mention_scope, :string
     belongs_to :channel, Nosilence.Communities.Channel
     belongs_to :author, Nosilence.Accounts.User
     timestamps(type: :utc_datetime_usec, updated_at: false)

@@ -24,6 +24,11 @@ defmodule Nosilence.Accounts.User do
     field :username, :string
     field :friend_requests_from, :string, default: "everyone"
     field :community_members_can_message, :boolean, default: true
+    # Profile (ADR 0017): see Nosilence.Profiles.
+    field :avatar_version, :integer
+    field :status, :string, default: "online"
+    field :status_text, :string
+    field :status_expires_at, :utc_datetime
 
     timestamps(type: :utc_datetime)
   end

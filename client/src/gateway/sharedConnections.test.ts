@@ -24,6 +24,15 @@ const listener = (): CommunityListener => ({
   removed: vi.fn(),
 })
 
+const member = {
+  id: 'u1',
+  display_name: 'A',
+  voice_channel_id: null,
+  avatar: null,
+  status: 'online' as const,
+  status_text: null,
+  status_expires_at: null,
+}
 describe('shared community connections', () => {
   it('the page and the call use one connection; it closes after the last user', () => {
     const { connect, log } = fake()
@@ -44,14 +53,12 @@ describe('shared community connections', () => {
     const page = listener()
     shared('c1', page)
     upstream().joined()
-    upstream().presence([{ id: 'u1', display_name: 'A', voice_channel_id: null }])
+    upstream().presence([member])
 
     const call = listener()
     shared('c1', call)
     await Promise.resolve()
-    expect(call.presence).toHaveBeenCalledWith([
-      { id: 'u1', display_name: 'A', voice_channel_id: null },
-    ])
+    expect(call.presence).toHaveBeenCalledWith([member])
     expect(call.joined).toHaveBeenCalled()
 
     upstream().removed()
