@@ -2,7 +2,13 @@
 import { request } from './http'
 
 export type Role = 'owner' | 'moderator' | 'member'
-export type CommunitySummary = { id: string; name: string; role: Role }
+export type CommunitySummary = {
+  id: string
+  name: string
+  role: Role
+  /** Unread messages from others in its text channels (the rail; up to 100). */
+  unread?: number
+}
 export type Channel =
   | { id: string; name: string; kind: 'voice'; capacity: number }
   | { id: string; name: string; kind: 'text'; capacity: null; unread?: number }

@@ -15,13 +15,13 @@ export function UpdateBanner() {
   const dismissed = useBannerDismissed()
   if (state.status === 'installing')
     return (
-      <p className="banner" role="status">
+      <p className="update-banner" role="status">
         Installing Nosilence {state.version}…
       </p>
     )
   if (state.status !== 'ready' || dismissed) return null
   return (
-    <div className="banner" role="status">
+    <div className="update-banner" role="status">
       Nosilence {state.version} is ready. Restarting leaves any call you are in.{' '}
       <button type="button" onClick={() => void installUpdate()}>
         Restart now
@@ -77,5 +77,42 @@ export function UpdateCorner() {
         </>
       )}
     </footer>
+  )
+}
+
+/** Settings > About, desktop app: the version, checking and restarting (ADR 0014). */
+export function AboutSection() {
+  const state = useUpdateState()
+  const [version, setVersion] = useState<string | null>(null)
+
+  useEffect(() => {
+    appVersion()
+      .then(setVersion)
+      .catch(() => setVersion(null))
+  }, [])
+
+  return (
+    <>
+      <h2>About</h2>
+      <p>Nosilence {version ?? ''}</p>
+      {state.status === 'ready' ? (
+        <p>
+          Version {state.version} is ready.{' '}
+          <button type="button" onClick={() => void installUpdate()}>
+            Restart to update
+          </button>
+        </p>
+      ) : (
+        <button
+          type="button"
+          className="secondary"
+          disabled={state.status === 'checking' || state.status === 'installing'}
+          onClick={() => void checkForUpdates()}
+        >
+          Check for updates
+        </button>
+      )}
+      {MESSAGES[state.status] && <p role="status">{MESSAGES[state.status]}</p>}
+    </>
   )
 }

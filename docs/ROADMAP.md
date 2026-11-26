@@ -91,6 +91,8 @@ Split in two (Burak, 2026-11-26):
 - **11a:** usernames, friends, blocking, direct and group messages (ADR 0015).
 - **11b:** profile picture and status, mentions and reactions, and the notification
   work deferred from phase 10.
+- Between them (Burak, 2026-11-26): a new layout with design tokens and dark and light
+  themes (ADR 0016), so 11b's screens are built once.
 **Done:** people can find each other and talk outside communities.
 
 ### Phase 12: Release (M)

@@ -56,6 +56,16 @@ defmodule Nosilence.Communities do
     )
   end
 
+  @doc "Text channel ids per community, `%{community_id => [channel_id]}`."
+  def text_channels_of(community_ids) do
+    Repo.all(
+      from c in Channel,
+        where: c.community_id in ^community_ids and c.kind == "text",
+        select: {c.community_id, c.id}
+    )
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+  end
+
   @doc "The community, its channels and the user's membership, for members only."
   def get_community(%User{} = user, community_id) do
     with {:ok, membership} <- authorize(user, community_id, :view) do

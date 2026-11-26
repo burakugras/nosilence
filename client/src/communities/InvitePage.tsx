@@ -5,6 +5,7 @@ import { ApiError } from '../api/http'
 import { FormMessage } from '../components/Field'
 import { Link } from '../components/Link'
 import { navigate } from '../router'
+import { refreshCommunities } from './communityList'
 
 /** Opened from an invite link: /invite?token=... (signed-in users only). */
 export function InvitePage({ token }: { token: string | null }) {
@@ -27,6 +28,8 @@ export function InvitePage({ token }: { token: string | null }) {
     setBusy(true)
     try {
       const joined = await acceptInvite(token)
+      // The rail shows the new community.
+      await refreshCommunities()
       navigate(`/c/${joined.id}`, { replace: true })
     } catch (e) {
       setMessage(e instanceof ApiError ? e.message : 'Could not join.')

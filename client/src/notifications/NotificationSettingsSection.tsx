@@ -6,7 +6,7 @@ export function NotificationSettingsSection() {
   const settings = useNotificationSettings()
   return (
     <section aria-label="Notifications" className="stack-form">
-      <h3>Notifications</h3>
+      <h2>Notifications</h2>
       <label className="checkbox">
         <input
           type="checkbox"

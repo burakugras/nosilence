@@ -29,7 +29,7 @@ export function PrivacySection({ user, onChange }: { user: User; onChange: (user
 
   return (
     <section aria-label="Privacy" className="stack-form">
-      <h3>Username and privacy</h3>
+      <h2>Username and privacy</h2>
       <form className="inline-form" onSubmit={rename} aria-label="Username">
         <input
           aria-label="Username"

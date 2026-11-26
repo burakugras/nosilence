@@ -22,6 +22,22 @@ defmodule NosilenceWeb.MessageControllerTest do
     Map.merge(fixture, %{owner: owner, member: member})
   end
 
+  test "the community list counts unread messages for the rail", %{text_channel: ch} = ctx do
+    {:ok, m} = Nosilence.Messaging.send_message(ctx.owner, ch.id, "hello")
+
+    assert %{"communities" => [%{"unread" => 1}]} =
+             authed(ctx.member) |> get(~p"/api/communities") |> json_response(200)
+
+    # The author's own messages do not count.
+    assert %{"communities" => [%{"unread" => 0}]} =
+             authed(ctx.owner) |> get(~p"/api/communities") |> json_response(200)
+
+    :ok = Nosilence.Messaging.mark_read(ctx.member, ch.id, m.id)
+
+    assert %{"communities" => [%{"unread" => 0}]} =
+             authed(ctx.member) |> get(~p"/api/communities") |> json_response(200)
+  end
+
   test "send, list and delete messages", %{text_channel: ch} = ctx do
     sent = authed(ctx.member) |> post(~p"/api/channels/#{ch.id}/messages", %{text: "hi there"})
 
