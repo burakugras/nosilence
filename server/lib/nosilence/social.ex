@@ -238,16 +238,23 @@ defmodule Nosilence.Social do
   def open_direct(%User{} = user, other_id) do
     with {:ok, other_id} <- Ecto.UUID.cast(other_id),
          %User{} = other <- Repo.get(User, other_id),
-         true <- other.id != user.id,
-         :ok <- may_message(user, other) do
+         true <- other.id != user.id do
       {low, high} = order(user.id, other.id)
       key = "#{low}:#{high}"
 
-      conversation =
-        Repo.get_by(Conversation, direct_key: key) ||
-          create_conversation(%{kind: "direct", direct_key: key}, [user.id, other.id])
+      # An existing conversation opens whenever the user may still write in it
+      # (they may reply to someone who wrote to them); a new one needs the
+      # usual permission.
+      case Repo.get_by(Conversation, direct_key: key) do
+        %Conversation{} = c ->
+          with :ok <- may_still_write(user, c), do: {:ok, c}
 
-      {:ok, conversation}
+        nil ->
+          with :ok <- may_message(user, other),
+               do:
+                 {:ok,
+                  create_conversation(%{kind: "direct", direct_key: key}, [user.id, other.id])}
+      end
     else
       {:error, _} = error -> error
       _ -> {:error, :cannot_message}
@@ -371,6 +378,8 @@ defmodule Nosilence.Social do
         members: Map.get(members, c.id, []),
         last_message_at: last[c.id],
         unread: unread(c.id, me, read_seq),
+        # The app closes the composer when the user cannot write here.
+        can_write: may_still_write(%User{id: me}, c) == :ok,
         sort: last[c.id] || c.inserted_at
       }
     end)
@@ -596,14 +605,31 @@ defmodule Nosilence.Social do
 
   # A direct conversation stays only as long as messaging is allowed (blocked,
   # unfriended outside shared communities): the history stays readable.
+  # Writing to someone welcomes their reply (Burak, ADR 0015 amendment): once
+  # the other person has written here, the user may answer whatever the other's
+  # privacy setting says. A block always wins.
   defp may_still_write(user, %Conversation{kind: "direct"} = c) do
     case member_ids_of(c.id) -- [user.id] do
-      [other_id] -> may_message(user, Repo.get!(User, other_id))
-      [] -> {:error, :cannot_message}
+      [other_id] ->
+        cond do
+          blocked_between?(user.id, other_id) -> {:error, :cannot_message}
+          wrote_in?(c.id, other_id) -> :ok
+          true -> may_message(user, Repo.get!(User, other_id))
+        end
+
+      [] ->
+        {:error, :cannot_message}
     end
   end
 
   defp may_still_write(_user, _group), do: :ok
+
+  defp wrote_in?(conversation_id, user_id),
+    do:
+      Repo.exists?(
+        from m in ConversationMessage,
+          where: m.conversation_id == ^conversation_id and m.author_id == ^user_id
+      )
 
   defp message_allowed(user) do
     case Nosilence.RateLimit.hit(:message, user.id) do

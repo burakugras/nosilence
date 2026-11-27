@@ -213,4 +213,31 @@ defmodule Nosilence.SocialTest do
                Social.rename_group(ctx.cem, g.id, String.duplicate("x", 51))
     end
   end
+
+  describe "replies (ADR 0015 amendment)" do
+    test "someone who wrote to the user gets their reply, whatever their own setting", ctx do
+      # Ayşe and Cem share a community but are not friends. Ayşe takes no
+      # messages from community members, Cem does.
+      %{community: community} = community_fixture(ctx.ayse)
+      :ok = join_fixture(ctx.ayse, community, ctx.cem)
+      {:ok, ayse} = Social.update_privacy(ctx.ayse, %{"community_members_can_message" => false})
+
+      # Cem cannot start a conversation with Ayşe.
+      assert {:error, :cannot_message} = Social.open_direct(ctx.cem, ayse.id)
+
+      # Ayşe writes to Cem: Cem may answer, and open the conversation again.
+      {:ok, c} = Social.open_direct(ayse, ctx.cem.id)
+      [%{can_write: false}] = Social.list_conversations(ctx.cem)
+      {:ok, _} = Social.send_message(ayse, c.id, "hi Cem")
+      assert [%{can_write: true}] = Social.list_conversations(ctx.cem)
+      assert {:ok, _} = Social.send_message(ctx.cem, c.id, "hi Ayşe")
+      assert {:ok, %{id: same}} = Social.open_direct(ctx.cem, ayse.id)
+      assert same == c.id
+
+      # A block always wins.
+      :ok = Social.block(ayse, ctx.cem.id)
+      assert {:error, :cannot_message} = Social.send_message(ctx.cem, c.id, "still?")
+      assert [%{can_write: false}] = Social.list_conversations(ctx.cem)
+    end
+  end
 end

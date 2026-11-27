@@ -60,3 +60,14 @@ conversation messages; "delete my messages" also deletes conversation messages.
   over on a lawful request like channel messages.
 - Each conversation message is sent to every member's topic; groups are small (ten).
 - Existing accounts see the username page once.
+
+## Amendment (2026-11-27): writing welcomes a reply
+
+Messaging permission was checked against the recipient's privacy setting on every
+message, so someone who took no messages from community members could write to a
+member who could not answer. Burak's decision: once someone has written in a direct
+conversation, the other person may reply, whatever the writer's own setting says; the
+setting stops others from *starting* a conversation. A block always wins. The
+conversation list carries `can_write`, and where it is false the app shows a note in
+place of the composer (it does not say why, so a block is not revealed).
+

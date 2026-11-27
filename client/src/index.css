@@ -2277,3 +2277,15 @@ button.side-header:hover {
   flex: 1;
   max-width: 260px;
 }
+
+/* In place of the composer when the user cannot write (a block, no permission). */
+.composer-closed {
+  margin: 0 var(--space-4) var(--space-3);
+  padding: var(--space-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-m);
+  color: var(--text-muted);
+  font-size: var(--text-s);
+  text-align: center;
+  flex: none;
+}
