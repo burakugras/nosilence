@@ -885,11 +885,22 @@ button.side-header:hover {
   flex: none;
 }
 
+/* The time of a grouped line, shown on hover. Out of the layout: it must not
+   change the line's height (it did by a quarter pixel, which made every line
+   below shimmer while the pointer moved over the messages). */
+.messages .gutter {
+  position: relative;
+}
+
 .messages .gutter time {
   display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 5px;
   font-size: 10px;
+  line-height: 12px;
   color: var(--text-faint);
-  line-height: 22px;
 }
 
 .messages li:hover .gutter time {
