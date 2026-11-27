@@ -60,5 +60,10 @@ defmodule NosilenceWeb.MessageController do
          do: send_resp(conn, :no_content, "")
   end
 
+  def reactors(conn, %{"id" => id, "emoji" => emoji}) do
+    with {:ok, reactors} <- Messaging.reactors(conn.assigns.current_user, id, emoji),
+         do: json(conn, reactors)
+  end
+
   defp mentions(params), do: Map.take(params, ["mentions", "mention"])
 end

@@ -124,4 +124,43 @@ defmodule NosilenceWeb.ProfileControllerTest do
     assert ["GET, POST, PUT, PATCH, DELETE"] =
              get_resp_header(conn, "access-control-allow-methods")
   end
+
+  test "notification settings, mention counts and who reacted (ADR 0018)", ctx do
+    ch = ctx.text_channel.id
+    c = ctx.community.id
+
+    assert authed(ctx.member)
+           |> put("/api/notification-settings/community/#{c}", %{level: "mentions"})
+           |> response(204)
+
+    assert %{"settings" => [%{"type" => "community", "level" => "mentions"}]} =
+             authed(ctx.member) |> get(~p"/api/notification-settings") |> json_response(200)
+
+    assert authed(ctx.member)
+           |> delete("/api/notification-settings/community/#{c}")
+           |> response(204)
+
+    assert %{"settings" => []} =
+             authed(ctx.member) |> get(~p"/api/notification-settings") |> json_response(200)
+
+    {:ok, m} =
+      Nosilence.Messaging.send_message(ctx.owner, ch, "hi @member", %{
+        "mentions" => [ctx.member.id]
+      })
+
+    assert %{"communities" => [%{"unread" => 1, "mentions" => 1}]} =
+             authed(ctx.member) |> get(~p"/api/communities") |> json_response(200)
+
+    assert %{"channels" => channels} =
+             authed(ctx.member) |> get(~p"/api/communities/#{c}") |> json_response(200)
+
+    assert %{"mentions" => 1, "unread" => 1} = Enum.find(channels, &(&1["id"] == ch))
+
+    :ok = Nosilence.Messaging.react(ctx.member, m.id, "👍", true)
+
+    assert %{"names" => ["Member"], "total" => 1} =
+             authed(ctx.owner)
+             |> get("/api/messages/#{m.id}/reactions/#{URI.encode("👍")}")
+             |> json_response(200)
+  end
 end

@@ -148,14 +148,57 @@ export function desktopPushToTalk(keys: string[], onChange: (down: boolean) => v
   }
 }
 
+/** Web: whether this browser may show notifications ("unsupported" without the API). */
+export function webNotificationPermission(): NotificationPermission | 'unsupported' {
+  if (isDesktop || typeof Notification === 'undefined') return 'unsupported'
+  return Notification.permission
+}
+
+/** Web: asks the browser for permission (only after the user's click). */
+export async function askWebNotificationPermission(): Promise<boolean> {
+  if (webNotificationPermission() === 'unsupported') return false
+  return (await Notification.requestPermission()) === 'granted'
+}
+
 /**
- * Desktop app: a Windows notification. Asks for permission the first time;
- * does nothing if it is refused, and on the web.
+ * A notification. Desktop: a Windows notification (asks for permission the
+ * first time). Web: a browser notification if the user allowed them; clicking
+ * it brings the tab forward and runs `onClick` (ADR 0018).
  */
-export async function showNotification(title: string, body: string) {
-  if (!isDesktop) return
+export async function showNotification(title: string, body: string, onClick?: () => void) {
+  if (!isDesktop) {
+    if (webNotificationPermission() !== 'granted') return
+    const n = new Notification(title, { body })
+    n.onclick = () => {
+      window.focus()
+      onClick?.()
+      n.close()
+    }
+    return
+  }
   const { isPermissionGranted, requestPermission, sendNotification } =
     await import('@tauri-apps/plugin-notification')
   const allowed = (await isPermissionGranted()) || (await requestPermission()) === 'granted'
   if (allowed) sendNotification({ title, body })
+}
+
+/**
+ * Desktop app: calls `handler` with every nosilence:// link that opened the app
+ * or reached it while running (ADR 0018). Returns a stop function.
+ */
+export function onDeepLink(handler: (url: string) => void): () => void {
+  if (!isDesktop) return () => {}
+  let stopped = false
+  let unlisten: (() => void) | undefined
+  void import('@tauri-apps/plugin-deep-link').then(async ({ getCurrent, onOpenUrl }) => {
+    const first = await getCurrent().catch(() => null)
+    if (!stopped) first?.forEach(handler)
+    const stop = await onOpenUrl((urls) => urls.forEach(handler))
+    if (stopped) stop()
+    else unlisten = stop
+  })
+  return () => {
+    stopped = true
+    unlisten?.()
+  }
 }

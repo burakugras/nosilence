@@ -26,6 +26,8 @@ export type CommunityView = {
   people: Mentionable[]
   /** Unread messages per text channel. */
   unread: Record<string, number>
+  /** Unread messages that mention the user, per text channel (ADR 0018). */
+  mentions: Record<string, number>
   /** The text channel on screen. */
   openTextId: string | undefined
   reportUnread: (count: number) => void

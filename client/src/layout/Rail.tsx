@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { communityLevel, useLevels } from '../notifications/levels'
 import { initials, useCommunityList } from '../communities/communityList'
 import { Link } from '../components/Link'
 import { isDesktop } from '../platform'
@@ -10,10 +11,13 @@ const count = (n: number) => (n > 99 ? '99+' : String(n))
 
 /**
  * The far left (ADR 0016): Home (friends and direct messages), every
- * community, and creating or joining one. Unread counts as badges.
+ * community, and creating or joining one. A red count is for what concerns the
+ * user: direct messages on Home, mentions on a community; other unread messages
+ * show as a dot, except in communities set to nothing (ADR 0018).
  */
 export function Rail({ path }: { path: string }) {
   const communities = useCommunityList()
+  useLevels()
   const homeUnread = totalUnread(useConversations())
   const canGoBack = useCanGoBack()
   const onHome = path === '/' || path.startsWith('/friends') || path.startsWith('/messages')
@@ -44,18 +48,29 @@ export function Rail({ path }: { path: string }) {
       </Link>
       <span className="rail-divider" />
       {communities?.map((c) => {
-        const unread = c.unread ?? 0
+        const mentions = c.mentions ?? 0
+        const muted = communityLevel(c.id) === 'none'
+        const unread = !muted && (c.unread ?? 0) > 0
+        const label = mentions
+          ? `${c.name}, ${mentions} ${mentions === 1 ? 'mention' : 'mentions'}`
+          : unread
+            ? `${c.name}, unread messages`
+            : c.name
         return (
           <Link
             key={c.id}
             to={`/c/${c.id}`}
-            className="rail-item"
-            aria-label={unread ? `${c.name}, ${unread} unread` : c.name}
+            className={muted ? 'rail-item muted' : 'rail-item'}
+            aria-label={label}
             title={c.name}
             aria-current={path.startsWith(`/c/${c.id}`) ? 'page' : undefined}
           >
             {initials(c.name)}
-            {unread > 0 && <span className="unread-count">{count(unread)}</span>}
+            {mentions > 0 ? (
+              <span className="unread-count">{count(mentions)}</span>
+            ) : (
+              unread && <span className="unread-dot" />
+            )}
           </Link>
         )
       })}

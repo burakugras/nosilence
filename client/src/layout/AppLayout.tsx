@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { NotificationPrompt } from '../notifications/NotificationPrompt'
+import { isDesktop } from '../platform'
 import { useState, type ReactNode } from 'react'
 import type { User } from '../api/accounts'
 import { CommunityMain } from '../communities/CommunityMain'
@@ -102,7 +104,10 @@ export function AppLayout({
         <VoicePanel />
         <UserPanel user={user} />
       </aside>
-      <main className="main">{main}</main>
+      <main className="main">
+        {!isDesktop && <NotificationPrompt />}
+        {main}
+      </main>
       {members && (!membersHidden || membersOpen) && <MembersColumn />}
     </div>
   )

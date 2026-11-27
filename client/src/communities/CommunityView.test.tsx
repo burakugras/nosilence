@@ -24,7 +24,8 @@ vi.mock('../api/communities', () => ({
       community: { id: C, name: 'Ekip', role },
       channels: [
         { id: VOICE, name: 'General', kind: 'voice', capacity: 8 },
-        { id: T1, name: 'general', kind: 'text', capacity: null, unread: 0 },
+        // The server still counts two mentions in the channel that opens first.
+        { id: T1, name: 'general', kind: 'text', capacity: null, unread: 0, mentions: 2 },
         { id: T2, name: 'news', kind: 'text', capacity: null, unread: 4 },
       ],
     }),
@@ -67,6 +68,7 @@ vi.mock('../api/messages', () => ({
     }),
   markRead: () => Promise.resolve(),
   reactToMessage: () => Promise.resolve(),
+  listReactors: () => Promise.resolve({ names: [], total: 0 }),
   sendMessage: (_channel: string, text: string) => {
     sent.push(text)
     return Promise.resolve({ ...message('m22', text, 'u1') })
@@ -265,6 +267,39 @@ describe('a community', () => {
       }),
     )
     expect(screen.getByRole('link', { name: '#news, 5 unread' })).toBeInTheDocument()
+  })
+
+  it("the open channel's mentions do not count; mentions elsewhere arrive live (ADR 0018)", async () => {
+    const { state } = renderCommunity()
+    expect(await screen.findByRole('link', { name: '#general' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    act(() =>
+      state.listener!.event({
+        type: 'message_created',
+        message: { ...message('m77777', 'hey @me'), channel_id: T2, mentions: ['u1'] },
+      }),
+    )
+    expect(screen.getByRole('link', { name: '#news, 1 mentions, 5 unread' })).toBeInTheDocument()
+  })
+
+  it('the bell next to the community name counts what would notify; over 10 shows 10+', async () => {
+    const { state } = renderCommunity()
+    const bell = await screen.findByRole('button', { name: 'Notifications for Ekip, 4 new' })
+    expect(bell).toHaveTextContent('4')
+    for (let i = 0; i < 7; i++)
+      act(() =>
+        state.listener!.event({
+          type: 'message_created',
+          message: { ...message(`m9${i}0000`, 'more'), channel_id: T2 },
+        }),
+      )
+    expect(
+      screen.getByRole('button', { name: 'Notifications for Ekip, 11 new' }),
+    ).toHaveTextContent('10+')
+    fireEvent.click(screen.getByRole('button', { name: /^Notifications for Ekip/ }))
+    expect(screen.getByRole('dialog', { name: 'Notifications for Ekip' })).toBeInTheDocument()
   })
 
   it('opens the text channel in the address', async () => {

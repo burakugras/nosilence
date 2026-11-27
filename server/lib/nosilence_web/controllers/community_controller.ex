@@ -12,14 +12,26 @@ defmodule NosilenceWeb.CommunityController do
     user = conn.assigns.current_user
     communities = Communities.list_communities(user)
     channels = Communities.text_channels_of(Enum.map(communities, & &1.community.id))
-    unread = Nosilence.Messaging.unread_counts(user, channels |> Map.values() |> List.flatten())
+    all_channels = channels |> Map.values() |> List.flatten()
+    unread = Nosilence.Messaging.unread_counts(user, all_channels)
+    mentions = Nosilence.Messaging.mention_counts(user, all_channels)
 
     json(conn, %{
       communities:
         Enum.map(communities, fn %{community: c, role: role} ->
-          # Unread messages from others in all its text channels (the rail's badge).
-          total = channels |> Map.get(c.id, []) |> Enum.map(&unread[&1]) |> Enum.sum()
-          %{id: c.id, name: c.name, role: role, unread: min(total, 100)}
+          # Unread messages from others in all its text channels, and those that
+          # mention the user (the rail: a dot, and a red count; ADR 0018).
+          ids = Map.get(channels, c.id, [])
+          total = ids |> Enum.map(&unread[&1]) |> Enum.sum()
+          mentioned = ids |> Enum.map(&mentions[&1]) |> Enum.sum()
+
+          %{
+            id: c.id,
+            name: c.name,
+            role: role,
+            unread: min(total, 100),
+            mentions: min(mentioned, 100)
+          }
         end)
     })
   end
@@ -39,18 +51,19 @@ defmodule NosilenceWeb.CommunityController do
   def show(conn, %{"id" => id}) do
     with {:ok, %{community: c, channels: channels, membership: m}} <-
            Communities.get_community(conn.assigns.current_user, id) do
-      unread =
-        Nosilence.Messaging.unread_counts(
-          conn.assigns.current_user,
-          for(ch <- channels, ch.kind == "text", do: ch.id)
-        )
+      text_ids = for ch <- channels, ch.kind == "text", do: ch.id
+      unread = Nosilence.Messaging.unread_counts(conn.assigns.current_user, text_ids)
+      mentions = Nosilence.Messaging.mention_counts(conn.assigns.current_user, text_ids)
 
       json(conn, %{
         community: %{id: c.id, name: c.name, role: m.role},
         channels:
           Enum.map(channels, fn ch ->
             json = channel_json(ch)
-            if ch.kind == "text", do: Map.put(json, :unread, unread[ch.id]), else: json
+
+            if ch.kind == "text",
+              do: Map.merge(json, %{unread: unread[ch.id], mentions: mentions[ch.id]}),
+              else: json
           end)
       })
     end

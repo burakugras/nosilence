@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { isDesktop } from '../platform'
+import { desktopInviteLink } from './inviteLink'
 import { useEffect, useState } from 'react'
 import { acceptInvite, previewInvite } from '../api/communities'
 import { ApiError } from '../api/http'
@@ -55,6 +57,12 @@ export function InvitePage({ token }: { token: string | null }) {
       <button type="button" disabled={busy} onClick={() => void accept()}>
         {busy ? 'Joining…' : `Join ${community.name}`}
       </button>
+      {/* The desktop app opens the same invite, and asks again (ADR 0018). */}
+      {!isDesktop && token && (
+        <p className="muted">
+          Have the desktop app? <a href={desktopInviteLink(token)}>Open this invite there</a>.
+        </p>
+      )}
       <FormMessage text={message} />
     </section>
   )

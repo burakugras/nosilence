@@ -66,6 +66,12 @@ export const editMessage = async (id: string, text: string, mentions: Mentions =
     })
   ).message
 
+/** Who put an emoji on a message: the first names and how many in all (ADR 0018). */
+export type Reactors = { names: string[]; total: number }
+
+export const listReactors = (id: string, emoji: string) =>
+  request<Reactors>(`/api/messages/${id}/reactions/${encodeURIComponent(emoji)}`)
+
 /** Adds (`add`) or removes the user's `emoji` on a message. */
 export const reactToMessage = (id: string, emoji: string, add: boolean) =>
   request<void>(`/api/messages/${id}/reactions/${encodeURIComponent(emoji)}`, {

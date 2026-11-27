@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useFriendsPresence } from '../presence/friendsPresence'
+import { liveStatusText, STATUS_LABEL } from '../presence/status'
+import { Avatar } from '../ui/Avatar'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { openDirect } from '../api/conversations'
 import { ApiError } from '../api/http'
@@ -96,7 +99,7 @@ export function FriendsPage() {
               )}
             </People>
           )}
-          <People title={`Friends (${list.friends.length})`} people={list.friends}>
+          <People title={`Friends (${list.friends.length})`} people={list.friends} withStatus>
             {(p) => (
               <>
                 <button type="button" onClick={() => message(p)}>
@@ -154,22 +157,42 @@ export function FriendsPage() {
 function People({
   title,
   people,
+  withStatus = false,
   children,
 }: {
   title: string
   people: Person[]
+  /** Friends: their status, live (ADR 0018). */
+  withStatus?: boolean
   children: (p: Person) => React.ReactNode
 }) {
+  const presence = useFriendsPresence()
   return (
     <>
       <h3>{title}</h3>
       <ul className="plain-list" aria-label={title}>
-        {people.map((p) => (
-          <li key={p.id}>
-            <span>{label(p)}</span>
-            <span>{children(p)}</span>
-          </li>
-        ))}
+        {people.map((p) => {
+          const live = withStatus ? presence.get(p.id) : undefined
+          const status = withStatus ? (live?.status ?? 'offline') : undefined
+          const text = live ? liveStatusText(live.status_text, live.status_expires_at) : null
+          return (
+            <li key={p.id}>
+              <span className="person">
+                <Avatar id={p.id} name={p.display_name} avatar={p.avatar} status={status} />
+                <span className="person-name">
+                  <span>{label(p)}</span>
+                  {status && (
+                    <span className="status-text">
+                      {STATUS_LABEL[status]}
+                      {text && ` · ${text}`}
+                    </span>
+                  )}
+                </span>
+              </span>
+              <span>{children(p)}</span>
+            </li>
+          )
+        })}
       </ul>
     </>
   )

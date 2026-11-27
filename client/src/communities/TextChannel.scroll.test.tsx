@@ -23,6 +23,7 @@ vi.mock('../api/messages', () => ({
       read: { message_id: `m00${readUpTo}`, seq: readUpTo },
     }),
   reactToMessage: () => Promise.resolve(),
+  listReactors: () => Promise.resolve({ names: [], total: 0 }),
   markRead: (_channel: string, id: string) => {
     marked.push(id)
     return Promise.resolve()

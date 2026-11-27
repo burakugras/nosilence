@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { conversationLevel, useLevels } from '../notifications/levels'
+import { NotificationMenu } from '../notifications/NotificationMenu'
 import {
   useCallback,
   useEffect,
@@ -129,6 +131,7 @@ export function ConversationPage({
           : conversation.members.map((m) => m.display_name).join(', ')
       }
       headerStart={menuButton}
+      headerEnd={<ConversationBell id={id} name={title} />}
       notice={
         <>
           <p className="not-e2ee">
@@ -144,6 +147,37 @@ export function ConversationPage({
       people={conversation.members}
       live={live}
     />
+  )
+}
+
+/** How this conversation notifies (ADR 0018). */
+function ConversationBell({ id, name }: { id: string; name: string }) {
+  useLevels()
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null)
+  const level = conversationLevel(id)
+  return (
+    <>
+      <button
+        type="button"
+        className="icon-button"
+        aria-label={`Notifications for ${name}`}
+        aria-haspopup="dialog"
+        title="Notifications"
+        onClick={(e) => setAnchor(anchor ? null : e.currentTarget)}
+      >
+        <Icon name={level === 'all' ? 'bell' : 'bellOff'} />
+      </button>
+      {anchor && (
+        <NotificationMenu
+          type="conversation"
+          id={id}
+          name={name}
+          anchor={anchor}
+          side="left"
+          onClose={() => setAnchor(null)}
+        />
+      )}
+    </>
   )
 }
 
