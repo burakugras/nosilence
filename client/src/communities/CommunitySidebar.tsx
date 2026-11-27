@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { Level } from '../api/notificationSettings'
 import { channelLevel, communityLevel, useLevels } from '../notifications/levels'
 import { NotificationMenu } from '../notifications/NotificationMenu'
 import { useState } from 'react'
@@ -32,6 +33,7 @@ export function CommunitySidebar({
     view
   useLevels()
   const [bell, setBell] = useState<{ channel: Channel; anchor: HTMLElement } | null>(null)
+  const [communityBell, setCommunityBell] = useState<HTMLElement | null>(null)
   const call = useCall()
   const { speaking } = useCallState()
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null)
@@ -61,20 +63,57 @@ export function CommunitySidebar({
 
   const text = channels.filter((c) => c.kind === 'text')
   const voice = channels.filter((c) => c.kind === 'voice')
+  const waiting = notificationCount(
+    text.map((c) => ({
+      level: channelLevel(community.id, c.id),
+      unread: unread[c.id] ?? 0,
+      mentions: mentions[c.id] ?? 0,
+    })),
+  )
 
   return (
     <>
-      <button
-        type="button"
-        className="side-header"
-        aria-haspopup="menu"
-        aria-expanded={!!menuAnchor}
-        onClick={(e) => setMenuAnchor(menuAnchor ? null : e.currentTarget)}
-      >
-        <span>{community.name}</span>
-        <Icon name="chevron" />
-      </button>
+      <div className="side-header community-header">
+        <button
+          type="button"
+          className="community-name"
+          aria-haspopup="menu"
+          aria-expanded={!!menuAnchor}
+          onClick={(e) => setMenuAnchor(menuAnchor ? null : e.currentTarget)}
+        >
+          <span>{community.name}</span>
+          <Icon name="chevron" />
+        </button>
+        {/* Burak's choice: the community's notifications one click away, with
+            how many unread messages would notify at its levels (ADR 0018). */}
+        <button
+          type="button"
+          className="icon-button header-bell"
+          aria-haspopup="dialog"
+          aria-label={
+            `Notifications for ${community.name}` + (waiting > 0 ? `, ${waiting} new` : '')
+          }
+          title="Notifications"
+          onClick={(e) => setCommunityBell(communityBell ? null : e.currentTarget)}
+        >
+          <Icon name={communityLevel(community.id) === 'all' ? 'bell' : 'bellOff'} />
+          {waiting > 0 && (
+            <span className="bell-count" aria-hidden="true">
+              {waiting > 10 ? '10+' : waiting}
+            </span>
+          )}
+        </button>
+      </div>
       {menuAnchor && <CommunityMenu anchor={menuAnchor} onClose={() => setMenuAnchor(null)} />}
+      {communityBell && (
+        <NotificationMenu
+          type="community"
+          id={community.id}
+          name={community.name}
+          anchor={communityBell}
+          onClose={() => setCommunityBell(null)}
+        />
+      )}
 
       <nav className="side-list" aria-label={`${community.name} channels`}>
         <p className="section-title">Text channels</p>
@@ -201,6 +240,14 @@ export function CommunitySidebar({
 }
 
 const LEVEL_LABEL = { all: 'all messages', mentions: 'only mentions', none: 'nothing' } as const
+
+/** Unread messages that would notify: all unread, only mentions, or none, by level. */
+function notificationCount(channels: { level: Level; unread: number; mentions: number }[]) {
+  return channels.reduce(
+    (sum, c) => sum + (c.level === 'all' ? c.unread : c.level === 'mentions' ? c.mentions : 0),
+    0,
+  )
+}
 
 /** The community name's menu: invite, settings, leave or delete. */
 function CommunityMenu({ anchor, onClose }: { anchor: HTMLElement; onClose: () => void }) {

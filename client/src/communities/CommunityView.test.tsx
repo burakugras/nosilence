@@ -284,6 +284,24 @@ describe('a community', () => {
     expect(screen.getByRole('link', { name: '#news, 1 mentions, 5 unread' })).toBeInTheDocument()
   })
 
+  it('the bell next to the community name counts what would notify; over 10 shows 10+', async () => {
+    const { state } = renderCommunity()
+    const bell = await screen.findByRole('button', { name: 'Notifications for Ekip, 4 new' })
+    expect(bell).toHaveTextContent('4')
+    for (let i = 0; i < 7; i++)
+      act(() =>
+        state.listener!.event({
+          type: 'message_created',
+          message: { ...message(`m9${i}0000`, 'more'), channel_id: T2 },
+        }),
+      )
+    expect(
+      screen.getByRole('button', { name: 'Notifications for Ekip, 11 new' }),
+    ).toHaveTextContent('10+')
+    fireEvent.click(screen.getByRole('button', { name: /^Notifications for Ekip/ }))
+    expect(screen.getByRole('dialog', { name: 'Notifications for Ekip' })).toBeInTheDocument()
+  })
+
   it('opens the text channel in the address', async () => {
     renderCommunity(`/c/${C}/${T2}`)
     expect(await screen.findByRole('textbox', { name: 'Message #news' })).toBeInTheDocument()

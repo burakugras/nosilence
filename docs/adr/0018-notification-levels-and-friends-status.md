@@ -25,7 +25,10 @@ also silences mentions; do not disturb (ADR 0017) silences everything.
 mentions on a community (`mentions` next to `unread` in the community list and per
 channel; the app adds live ones and clears a channel's when it is opened). Other unread
 messages are a dot. Communities set to nothing show no dot and look dimmed. In the channel
-list, mentions are red and other counts grey; each text channel has a bell.
+list, mentions are red and other counts grey; each text channel has a bell. Next to the
+community's name, a bell (Burak's request) opens the community's levels and shows how many
+unread messages would notify at its levels: all unread in channels set to all messages,
+mentions in those set to mentions, none in those set to nothing; "10+" above ten.
 
 **Browser notifications (3B).** The web app shows the same notifications as the desktop
 app while its tab is in the background, if the browser allows them. The browser's question
