@@ -53,23 +53,48 @@ describe('interaction sounds (ADR 0020)', () => {
     vi.restoreAllMocks()
   })
 
-  it('joining, others coming and going, leaving', () => {
-    act(() =>
-      startCall({
-        communityId: 'c',
-        communityName: 'C',
-        channel: { id: 'v', name: 'General', kind: 'voice', capacity: 8 },
-        join: { url: 'ws://x', token: 't', room: 'v', identity: 'me' },
-        startedAt: 0,
-      }),
-    )
-    reportCall({ status: { state: 'securing' } })
-    expect(played).toEqual([])
-    reportCall({ status: secured(['me']) })
-    reportCall({ status: secured(['me', 'ayse']) })
-    reportCall({ status: secured(['me']) })
-    act(() => endCall())
-    expect(played).toEqual(['join', 'otherJoin', 'otherLeave', 'leave'])
+  const call = {
+    communityId: 'c',
+    communityName: 'C',
+    channel: { id: 'v', name: 'General', kind: 'voice' as const, capacity: 8 },
+    join: { url: 'ws://x', token: 't', room: 'v', identity: 'me' },
+    startedAt: 0,
+  }
+
+  it('joining (once the microphone is open), others coming and going, leaving', () => {
+    vi.useFakeTimers()
+    try {
+      act(() => startCall(call))
+      reportCall({ status: { state: 'securing' } })
+      reportCall({ status: secured(['me']) })
+      // Opening the microphone cuts audio off for a moment: the join sound waits.
+      expect(played).toEqual([])
+      reportCall({ micTrack: {} as MediaStreamTrack })
+      vi.advanceTimersByTime(249)
+      expect(played).toEqual([])
+      vi.advanceTimersByTime(1)
+      expect(played).toEqual(['join'])
+      reportCall({ status: secured(['me', 'ayse']) })
+      reportCall({ status: secured(['me']) })
+      act(() => endCall())
+      expect(played).toEqual(['join', 'otherJoin', 'otherLeave', 'leave'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('the join sound waits for the microphone at most 1.5 s (push-to-talk opens it later)', () => {
+    vi.useFakeTimers()
+    try {
+      act(() => startCall(call))
+      reportCall({ status: secured(['me']) })
+      vi.advanceTimersByTime(1499)
+      expect(played).toEqual([])
+      vi.advanceTimersByTime(1)
+      expect(played).toEqual(['join'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('mute and deafen sound; deafen silences others', () => {

@@ -44,3 +44,7 @@ switches (voice channel sounds, message sounds), kept on the device.
   `onCallStatus`, `onControlsChange`).
 - Browsers start audio only after the page has been used; every sound follows a user
   action or comes after one, so this does not get in the way.
+- Opening the microphone (with echo cancellation) makes the browser rebuild its audio
+  output, cutting off what plays for a moment. Measured: the microphone opened about half
+  a second after the call was secured, in the middle of the join sound. The join sound
+  now waits for the microphone (+250 ms), at most 1.5 s.

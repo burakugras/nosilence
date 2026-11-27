@@ -16,7 +16,7 @@
 import { useSyncExternalStore } from 'react'
 import { getControls, onControlsChange, type Controls } from '../voice/callState'
 import { onCallChange, type Call } from '../voice/call'
-import { onCallStatus } from '../voice/callState'
+import { onCallStatus, onMicReady } from '../voice/callState'
 import type { E2eeStatus } from '../e2ee/session'
 import type { MessageNotice } from '../gateway/types'
 import { onUserEvent } from '../gateway/userLive'
@@ -125,6 +125,11 @@ export function statusSounds(
 
 const inFront = () => document.hasFocus() && !document.hidden
 
+/** After the microphone opens, the audio output needs a moment to settle. */
+const MIC_SETTLE_MS = 250
+/** The longest the join sound waits for the microphone. */
+const JOIN_WAIT_MS = 1500
+
 /**
  * While signed in: plays the sounds as things happen. Returns a stop function.
  */
@@ -153,11 +158,38 @@ export function startSounds(userId: string): () => void {
     }),
   )
 
+  // The join sound waits for the microphone: opening it (with echo
+  // cancellation) makes the browser rebuild its audio output, which cuts off
+  // whatever is playing for a moment. Measured: the microphone opened about
+  // half a second after the call was secured, in the middle of the sound.
+  let pendingJoin: number | undefined
+  const joinNow = () => {
+    window.clearTimeout(pendingJoin)
+    pendingJoin = undefined
+    play('join')
+  }
+  const cancelJoin = () => {
+    window.clearTimeout(pendingJoin)
+    pendingJoin = undefined
+  }
+  stops.push(cancelJoin)
+  stops.push(
+    onMicReady(() => {
+      if (pendingJoin === undefined) return
+      window.clearTimeout(pendingJoin)
+      pendingJoin = window.setTimeout(joinNow, MIC_SETTLE_MS)
+    }),
+  )
+
   let status: E2eeStatus | null = null
   stops.push(
     onCallStatus((next) => {
       const e2ee = next && next.state !== 'ended' ? (next as E2eeStatus) : null
-      for (const sound of statusSounds(status, e2ee, userId)) play(sound)
+      for (const sound of statusSounds(status, e2ee, userId)) {
+        // Push-to-talk opens the microphone only at the first press: never wait forever.
+        if (sound === 'join') pendingJoin = window.setTimeout(joinNow, JOIN_WAIT_MS)
+        else play(sound)
+      }
       status = e2ee
     }),
   )
@@ -166,7 +198,10 @@ export function startSounds(userId: string): () => void {
   stops.push(
     onCallChange((next) => {
       // The user left (or was taken out of) a call that had connected.
-      if (call && !next && status?.state === 'secured') play('leave')
+      if (call && !next && status?.state === 'secured') {
+        cancelJoin()
+        play('leave')
+      }
       if (!next) status = null
       call = next
     }),
