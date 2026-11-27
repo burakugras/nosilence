@@ -35,3 +35,12 @@ const subscribe = (l: () => void) => {
 }
 
 export const useCall = () => useSyncExternalStore(subscribe, () => call)
+
+/** Calls `listener` whenever the call starts, changes or ends (interaction sounds). */
+export function onCallChange(listener: (call: Call | null) => void) {
+  const l = () => listener(call)
+  listeners.add(l)
+  return () => {
+    listeners.delete(l)
+  }
+}

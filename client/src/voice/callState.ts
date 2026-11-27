@@ -71,6 +71,36 @@ const subscribe = (l: () => void) => {
   return () => listeners.delete(l)
 }
 
+/** Calls `listener` when the mute or deafen switch changes (interaction sounds). */
+export function onControlsChange(listener: (controls: Controls) => void) {
+  let last = controls
+  const l = () => {
+    if (controls !== last) {
+      last = controls
+      listener(controls)
+    }
+  }
+  listeners.add(l)
+  return () => {
+    listeners.delete(l)
+  }
+}
+
+/** Calls `listener` when the call's status changes (interaction sounds). */
+export function onCallStatus(listener: (status: CallStatus | null) => void) {
+  let last = state.status
+  const l = () => {
+    if (state.status !== last) {
+      last = state.status
+      listener(state.status)
+    }
+  }
+  listeners.add(l)
+  return () => {
+    listeners.delete(l)
+  }
+}
+
 export const useCallState = () => useSyncExternalStore(subscribe, () => state)
 export const useControls = () => useSyncExternalStore(subscribe, () => controls)
 export const getControls = () => controls

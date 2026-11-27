@@ -2241,3 +2241,39 @@ button.side-header:hover {
   font-size: var(--text-xs);
   color: var(--text-faint);
 }
+
+/* ---- Interaction sounds (ADR 0020) ------------------------------------- */
+.sound-settings {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3) 0 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+.sound-settings legend {
+  padding: 0;
+  font-weight: 700;
+}
+
+.volume-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.stack-form .volume-row label {
+  display: block;
+  color: var(--text);
+}
+
+.volume-row button {
+  flex: none;
+  width: auto;
+}
+
+.volume-row input[type='range'] {
+  flex: 1;
+  max-width: 260px;
+}

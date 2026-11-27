@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { play } from '../sounds/sounds'
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -115,14 +116,20 @@ export function VoiceRoom({
   // Anonymous call quality, sent once when the call ends (ADR 0011).
   const [quality] = useState(() => new CallQuality())
   useEffect(() => {
-    const onReconnecting = () => quality.reconnected()
+    const onReconnecting = () => {
+      quality.reconnected()
+      play('lost')
+    }
+    const onReconnected = () => play('back')
     room.on(RoomEvent.Reconnecting, onReconnecting)
+    room.on(RoomEvent.Reconnected, onReconnected)
     const timer = window.setInterval(() => void quality.sample(room).catch(() => undefined), 5000)
     // Development builds only: the network test tool (tools/netlab) drives the room.
     if (import.meta.env.DEV)
       (window as unknown as { __nosilenceRoom?: Room }).__nosilenceRoom = room
     return () => {
       room.off(RoomEvent.Reconnecting, onReconnecting)
+      room.off(RoomEvent.Reconnected, onReconnected)
       window.clearInterval(timer)
       const report = quality.finish()
       if (report.join_ms !== undefined && report.duration_s >= 1)
