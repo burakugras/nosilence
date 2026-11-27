@@ -37,6 +37,7 @@ defmodule NosilenceWeb.Gateway.UserChannel do
       {:ok,
        socket
        |> assign(communities: MapSet.new(), names: %{}, levels: %{}, friends: MapSet.new())
+       |> assign(:blocked, MapSet.new(Social.blocked_ids(socket.assigns.user.id)))
        |> assign(profile: nil, idle: false, tracked: false)
        |> follow()}
     else
@@ -47,8 +48,10 @@ defmodule NosilenceWeb.Gateway.UserChannel do
   @impl true
   def handle_out("memberships_changed", _payload, socket), do: {:noreply, follow(socket)}
 
+  # Friends or blocks changed: follow the friends, and know whom the user blocked.
   def handle_out("friends_changed", payload, socket) do
     push(socket, "friends_changed", payload)
+    socket = assign(socket, :blocked, MapSet.new(Social.blocked_ids(socket.assigns.user.id)))
     {:noreply, follow_friends(socket)}
   end
 
@@ -89,7 +92,9 @@ defmodule NosilenceWeb.Gateway.UserChannel do
   def handle_info(%Broadcast{event: "message_created", payload: message}, socket) do
     me = socket.assigns.user.id
 
-    if message.author && message.author.id != me do
+    # Nothing from people the user blocked (ADR 0019).
+    if message.author && message.author.id != me &&
+         not MapSet.member?(socket.assigns.blocked, message.author.id) do
       {names, socket} = names(socket, message.channel_id)
       mentioned = me in (message[:mentions] || []) or message[:mention] in ["everyone", "here"]
       {level, socket} = level(socket, names, message.channel_id)

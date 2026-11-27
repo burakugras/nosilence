@@ -62,7 +62,7 @@ defmodule Nosilence.Messaging do
   def send_message(%User{} = user, channel_id, text, mentions \\ %{}) do
     with {:ok, channel, membership} <- text_channel(user, channel_id, :send_message),
          {:ok, text} <- validate_text(text),
-         {:ok, ids, scope} <- validate_mentions(channel, membership, mentions),
+         {:ok, ids, scope} <- validate_mentions(channel, membership, user, mentions),
          :ok <- message_allowed(user) do
       # `log: false`: the query log would print the content as a parameter.
       message =
@@ -165,6 +165,8 @@ defmodule Nosilence.Messaging do
   per text channel, `%{channel_id => count}`, counted up to 100 (ADR 0018).
   """
   def mention_counts(%User{id: user_id}, channel_ids) do
+    blocked = Nosilence.Social.blocked_ids(user_id)
+
     Map.new(channel_ids, fn channel_id ->
       mentions =
         from m in Message,
@@ -172,7 +174,7 @@ defmodule Nosilence.Messaging do
           on: r.channel_id == m.channel_id and r.user_id == ^user_id,
           where:
             m.channel_id == ^channel_id and
-              (is_nil(m.author_id) or m.author_id != ^user_id) and
+              (is_nil(m.author_id) or (m.author_id != ^user_id and m.author_id not in ^blocked)) and
               (is_nil(r.last_read_seq) or m.seq > r.last_read_seq) and
               (fragment("? = ANY(?)", type(^user_id, :binary_id), m.mentions) or
                  not is_nil(m.mention_scope)),
@@ -181,6 +183,67 @@ defmodule Nosilence.Messaging do
 
       {channel_id, Repo.aggregate(subquery(mentions), :count)}
     end)
+  end
+
+  @max_recent 10
+
+  @doc """
+  The last 10 messages of a community that notify the user at their levels
+  (ADR 0019): from others they did not block, in channels set to all messages,
+  or mentioning them in channels set to only mentions. Newest first, each with
+  its channel, author, a short text, whether it is unread and mentions them.
+  """
+  def recent_notifications(%User{id: user_id} = user, community_id) do
+    with {:ok, _} <- Communities.authorize(user, community_id, :view) do
+      channels =
+        Repo.all(
+          from ch in Nosilence.Communities.Channel,
+            where: ch.community_id == ^community_id and ch.kind == "text",
+            select: {ch.id, ch.name}
+        )
+
+      by_level =
+        Enum.group_by(channels, fn {id, _} ->
+          Nosilence.NotificationSettings.level(user_id, community_id, id)
+        end)
+
+      all = for {id, _} <- by_level["all"] || [], do: id
+      mentions_only = for {id, _} <- by_level["mentions"] || [], do: id
+      blocked = Nosilence.Social.blocked_ids(user_id)
+      names = Map.new(channels)
+
+      rows =
+        Repo.all(
+          from m in Message,
+            left_join: r in ReadState,
+            on: r.channel_id == m.channel_id and r.user_id == ^user_id,
+            where:
+              not is_nil(m.author_id) and m.author_id != ^user_id and m.author_id not in ^blocked and
+                (m.channel_id in ^all or
+                   (m.channel_id in ^mentions_only and
+                      (fragment("? = ANY(?)", type(^user_id, :binary_id), m.mentions) or
+                         not is_nil(m.mention_scope)))),
+            order_by: [desc: m.inserted_at, desc: m.seq],
+            limit: @max_recent,
+            preload: :author,
+            select: {m, r.last_read_seq}
+        )
+
+      {:ok,
+       Enum.map(rows, fn {m, read_seq} ->
+         %{
+           message_id: m.id,
+           channel_id: m.channel_id,
+           channel_name: names[m.channel_id],
+           author: author(m.author),
+           # One line in the list: the start of the text is enough.
+           text: String.slice(m.content, 0, 120),
+           inserted_at: m.inserted_at,
+           unread: is_nil(read_seq) or m.seq > read_seq,
+           mentioned: user_id in m.mentions or not is_nil(m.mention_scope)
+         }
+       end)}
+    end
   end
 
   @doc "Read positions, for the user's data export."
@@ -220,7 +283,7 @@ defmodule Nosilence.Messaging do
          %Message{author_id: author} = message when author == user.id <- Repo.get(Message, id),
          {:ok, channel, membership} <- text_channel(user, message.channel_id, :send_message),
          {:ok, text} <- validate_text(text),
-         {:ok, ids, scope} <- validate_mentions(channel, membership, mentions),
+         {:ok, ids, scope} <- validate_mentions(channel, membership, user, mentions),
          {1, [message]} <- count_edit(message.id, text, ids, scope) do
       message = Map.put(message, :author, user)
       Events.broadcast(channel.community_id, "message_updated", to_payload(message))
@@ -256,8 +319,10 @@ defmodule Nosilence.Messaging do
   @max_mentions 20
 
   # Mentioned people must be members of the community; anyone else is dropped
-  # (they could not read the message). Everyone and here need the permission.
-  defp validate_mentions(channel, membership, params) when is_map(params) do
+  # (they could not read the message). People who blocked the author are
+  # dropped too, silently: the block is never revealed (ADR 0019). Everyone and
+  # here need the permission.
+  defp validate_mentions(channel, membership, author, params) when is_map(params) do
     scope = params["mention"]
 
     with {:ok, ids} <- mention_ids(params["mentions"]),
@@ -269,11 +334,12 @@ defmodule Nosilence.Messaging do
             select: m.user_id
         )
 
-      {:ok, Enum.filter(ids, &(&1 in members)), scope}
+      blocking = Nosilence.Social.blocking(ids, author.id)
+      {:ok, Enum.filter(ids, &(&1 in members and &1 not in blocking)), scope}
     end
   end
 
-  defp validate_mentions(_channel, _membership, _params), do: {:ok, [], nil}
+  defp validate_mentions(_channel, _membership, _author, _params), do: {:ok, [], nil}
 
   @doc "Checks mention ids from a client (at most 20 UUIDs): `{:ok, ids}` without repeats."
   def mention_ids(nil), do: {:ok, []}

@@ -36,7 +36,9 @@ export function UpdateBanner() {
 const MESSAGES: Partial<Record<ReturnType<typeof useUpdateState>['status'], string>> = {
   checking: 'Checking…',
   latest: 'Up to date',
-  failed: 'Could not check',
+  unpublished: 'No version published yet',
+  unverified: 'Could not verify the update',
+  failed: 'Could not check (no connection?)',
 }
 
 /**

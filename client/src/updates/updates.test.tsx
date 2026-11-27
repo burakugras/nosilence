@@ -2,7 +2,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DownloadedUpdate } from '../platform'
-import { checkForUpdates, resetUpdatesForTests } from './updates'
+import { checkForUpdates, failureOf, resetUpdatesForTests } from './updates'
 import { UpdateBanner, UpdateCorner } from './UpdateViews'
 
 describe('desktop updates', () => {
@@ -61,5 +61,13 @@ describe('desktop updates', () => {
     expect(screen.getByText('· 0.2.0 is ready')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Restart to update' }))
     await vi.waitFor(() => expect(install).toHaveBeenCalledOnce())
+  })
+
+  it('tells apart nothing published, a wrong signature and other failures', () => {
+    expect(failureOf(new Error('Could not fetch a valid release JSON from the remote'))).toBe(
+      'unpublished',
+    )
+    expect(failureOf('the signature verification failed')).toBe('unverified')
+    expect(failureOf(new Error('error sending request'))).toBe('failed')
   })
 })

@@ -41,3 +41,4 @@ What becomes easier, what becomes harder, what we must do next.
 | [0016](0016-layout.md) | Layout, design tokens and themes |
 | [0017](0017-profiles-mentions-reactions.md) | Profile pictures, status, mentions and reactions |
 | [0018](0018-notification-levels-and-friends-status.md) | Notification levels, mentions on the rail, friends' status and desktop links |
+| [0019](0019-polish-blocks-and-the-bell.md) | Blocks and mentions, the bell's list, the notification settings window |

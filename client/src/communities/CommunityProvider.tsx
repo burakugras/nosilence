@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { isBlocked } from '../social/blockedStore'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   getCommunity,
@@ -13,6 +14,9 @@ import { CommunityContext, type CommunityView } from './communityContext'
 import { setCommunityUnread, setOpenChannel } from './communityList'
 
 type Loaded = { community: CommunitySummary; channels: Channel[] }
+
+/** How long the members column waits for who is online before showing everyone. */
+const PRESENCE_WAIT_MS = 1500
 
 /**
  * Loads one community and keeps it live for its three columns. `null` while it
@@ -37,6 +41,13 @@ export function CommunityProvider({
 }) {
   const [data, setData] = useState<Loaded | null>()
   const [members, setMembers] = useState<Member[]>([])
+  const [membersLoaded, setMembersLoaded] = useState(false)
+  // If the live connection does not come, show the members anyway after a moment.
+  const [presenceLate, setPresenceLate] = useState(false)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setPresenceLate(true), PRESENCE_WAIT_MS)
+    return () => window.clearTimeout(timer)
+  }, [])
   const [membersKey, setMembersKey] = useState(0)
   const [ownershipKey, setOwnershipKey] = useState(0)
   // Unread messages per text channel (ADR 0010): from the server on load, then
@@ -68,6 +79,7 @@ export function CommunityProvider({
     listMembers(communityId)
       .then(setMembers)
       .catch(() => setMembers([]))
+      .finally(() => setMembersLoaded(true))
   }, [communityId, membersKey])
 
   // Removed from the community, or it was deleted.
@@ -111,6 +123,7 @@ export function CommunityProvider({
           event.type === 'message_created' &&
           event.message.channel_id !== openTextId &&
           event.message.author?.id !== currentUserId &&
+          !isBlocked(event.message.author?.id) &&
           (!!event.message.mention || (event.message.mentions ?? []).includes(currentUserId))
         )
           setMentions((m) => ({
@@ -182,6 +195,7 @@ export function CommunityProvider({
       online,
       presence,
       members,
+      membersReady: membersLoaded && (live.synced || presenceLate),
       people,
       unread,
       mentions: shownMentions,
@@ -197,6 +211,8 @@ export function CommunityProvider({
     online,
     presence,
     members,
+    membersLoaded,
+    presenceLate,
     people,
     unread,
     shownMentions,

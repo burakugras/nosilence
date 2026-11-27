@@ -213,6 +213,22 @@ defmodule Nosilence.Social do
     )
   end
 
+  @doc "Ids of the people `user_id` blocked."
+  def blocked_ids(user_id),
+    do: Repo.all(from b in Block, where: b.blocker_id == ^user_id, select: b.blocked_id)
+
+  @doc """
+  Of `ids`, those who blocked `author_id`: their mention by that author is
+  dropped without telling anyone (ADR 0019).
+  """
+  def blocking(ids, author_id) do
+    Repo.all(
+      from b in Block,
+        where: b.blocked_id == ^author_id and b.blocker_id in ^ids,
+        select: b.blocker_id
+    )
+  end
+
   ## Conversations
 
   @doc """
@@ -392,7 +408,7 @@ defmodule Nosilence.Social do
     with {:ok, c} <- member_of(user, conversation_id),
          :ok <- may_still_write(user, c),
          {:ok, text} <- Messaging.validate_text(text),
-         {:ok, ids} <- conversation_mentions(c.id, mentions),
+         {:ok, ids} <- conversation_mentions(c.id, user.id, mentions),
          :ok <- message_allowed(user) do
       message =
         Repo.insert!(
@@ -419,7 +435,7 @@ defmodule Nosilence.Social do
            Repo.get(ConversationMessage, id),
          {:ok, _} <- member_of(user, m.conversation_id),
          {:ok, text} <- Messaging.validate_text(text),
-         {:ok, ids} <- conversation_mentions(m.conversation_id, mentions),
+         {:ok, ids} <- conversation_mentions(m.conversation_id, user.id, mentions),
          {1, [m]} <- count_edit(m.id, text, ids) do
       m = Map.put(m, :author, user)
       tell_members(m.conversation_id, "dm_updated", to_payload(m))
@@ -511,14 +527,16 @@ defmodule Nosilence.Social do
     }
   end
 
-  defp conversation_mentions(conversation_id, params) when is_map(params) do
+  defp conversation_mentions(conversation_id, author_id, params) when is_map(params) do
     with {:ok, ids} <- Messaging.mention_ids(params["mentions"]) do
       members = member_ids_of(conversation_id)
-      {:ok, Enum.filter(ids, &(&1 in members))}
+      ids = Enum.filter(ids, &(&1 in members))
+      blocking = blocking(ids, author_id)
+      {:ok, Enum.reject(ids, &(&1 in blocking))}
     end
   end
 
-  defp conversation_mentions(_conversation_id, _params), do: {:ok, []}
+  defp conversation_mentions(_conversation_id, _author_id, _params), do: {:ok, []}
 
   ## Account data (Nosilence.Privacy)
 

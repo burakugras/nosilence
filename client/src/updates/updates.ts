@@ -13,6 +13,10 @@ export type UpdateState =
   | { status: 'latest' }
   | { status: 'ready'; version: string }
   | { status: 'installing'; version: string }
+  /** No version has been published to update to (the release address answers 404). */
+  | { status: 'unpublished' }
+  /** A version was found but its signature is not ours: it is refused. */
+  | { status: 'unverified' }
   | { status: 'failed' }
 
 let state: UpdateState = { status: 'idle' }
@@ -33,9 +37,20 @@ export async function checkForUpdates(find: typeof downloadUpdate = downloadUpda
   try {
     ready = (await find()) ?? undefined
     set(ready ? { status: 'ready', version: ready.version } : { status: 'latest' })
-  } catch {
-    set({ status: 'failed' })
+  } catch (error) {
+    set({ status: failureOf(error) })
   }
+}
+
+/**
+ * What a failed check means, from the updater's error: nothing published yet,
+ * a package with a wrong signature, or anything else (no connection).
+ */
+export function failureOf(error: unknown): 'unpublished' | 'unverified' | 'failed' {
+  const text = String(error instanceof Error ? error.message : error).toLowerCase()
+  if (text.includes('valid release json') || text.includes('404')) return 'unpublished'
+  if (text.includes('signature')) return 'unverified'
+  return 'failed'
 }
 
 export async function installUpdate() {

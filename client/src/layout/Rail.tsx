@@ -2,8 +2,6 @@
 import { communityLevel, useLevels } from '../notifications/levels'
 import { initials, useCommunityList } from '../communities/communityList'
 import { Link } from '../components/Link'
-import { isDesktop } from '../platform'
-import { goBack, useCanGoBack } from '../router'
 import { totalUnread, useConversations } from '../social/conversationsStore'
 import { Icon } from '../ui/Icon'
 
@@ -19,23 +17,10 @@ export function Rail({ path }: { path: string }) {
   const communities = useCommunityList()
   useLevels()
   const homeUnread = totalUnread(useConversations())
-  const canGoBack = useCanGoBack()
   const onHome = path === '/' || path.startsWith('/friends') || path.startsWith('/messages')
 
   return (
     <nav className="rail" aria-label="Communities">
-      {/* The desktop app has no browser back button of its own. */}
-      {isDesktop && canGoBack && (
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Back"
-          title="Back"
-          onClick={goBack}
-        >
-          <Icon name="back" />
-        </button>
-      )}
       <Link
         to="/"
         className="rail-item"

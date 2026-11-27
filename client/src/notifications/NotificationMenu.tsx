@@ -3,15 +3,28 @@ import { useState, type FormEvent } from 'react'
 import type { Level, LevelTarget } from '../api/notificationSettings'
 import { ApiError } from '../api/http'
 import { FormMessage } from '../components/Field'
+import { Icon, type IconName } from '../ui/Icon'
 import { Popover } from '../ui/Popover'
 import { saveLevel, settingOf, useLevels } from './levels'
 
 type Duration = 'forever' | '1h' | '8h' | '24h'
 
-const LEVELS: { value: Level; label: string }[] = [
-  { value: 'all', label: 'All messages' },
-  { value: 'mentions', label: 'Only mentions' },
-  { value: 'none', label: 'Nothing' },
+const LEVELS: { value: Level; label: string; hint: string; icon: IconName }[] = [
+  { value: 'all', label: 'All messages', hint: 'Every new message', icon: 'bell' },
+  {
+    value: 'mentions',
+    label: 'Only mentions',
+    hint: '@you, @everyone and @here',
+    icon: 'at',
+  },
+  { value: 'none', label: 'Nothing', hint: 'No notifications at all', icon: 'bellOff' },
+]
+
+const DURATIONS: { value: Duration; label: string }[] = [
+  { value: '1h', label: '1 hour' },
+  { value: '8h', label: '8 hours' },
+  { value: '24h', label: '24 hours' },
+  { value: 'forever', label: 'Until I change it' },
 ]
 
 const untilOf = (d: Duration) =>
@@ -20,8 +33,9 @@ const untilOf = (d: Duration) =>
     : new Date(Date.now() + { '1h': 1, '8h': 8, '24h': 24 }[d] * 3_600_000).toISOString()
 
 /**
- * How a community, a channel or a conversation notifies (ADR 0018). A channel
- * can also follow its community ("Default").
+ * How a community, a channel or a conversation notifies (ADR 0018, 0019): the
+ * level as cards, how long as a row of choices. A channel can also follow its
+ * community ("Default").
  */
 export function NotificationMenu({
   type,
@@ -71,9 +85,18 @@ export function NotificationMenu({
     }
   }
 
-  const options = defaultLabel
-    ? [{ value: 'default' as const, label: `Default (${defaultLabel})` }, ...LEVELS]
-    : LEVELS
+  const options: { value: Level | 'default'; label: string; hint: string; icon: IconName }[] =
+    defaultLabel
+      ? [
+          {
+            value: 'default',
+            label: 'Default',
+            hint: `As the community: ${defaultLabel}`,
+            icon: 'people',
+          },
+          ...LEVELS,
+        ]
+      : LEVELS
 
   return (
     <Popover
@@ -84,10 +107,13 @@ export function NotificationMenu({
       onClose={onClose}
     >
       <form onSubmit={(e) => void onSubmit(e)}>
-        <fieldset>
-          <legend>Notify me about</legend>
+        <header className="popover-header">
+          <span className="popover-title">Notifications</span>
+          <span className="popover-subtitle">{name}</span>
+        </header>
+        <div className="level-cards" role="radiogroup" aria-label="Notify me about">
           {options.map((o) => (
-            <label key={o.value} className="radio">
+            <label key={o.value} className={level === o.value ? 'level-card on' : 'level-card'}>
               <input
                 type="radio"
                 name="level"
@@ -95,24 +121,36 @@ export function NotificationMenu({
                 checked={level === o.value}
                 onChange={() => setLevel(o.value)}
               />
-              {o.label}
+              <Icon name={o.icon} />
+              <span className="level-text">
+                <span className="level-label">{o.label}</span>
+                <span className="level-hint">{o.hint}</span>
+              </span>
             </label>
           ))}
-        </fieldset>
+        </div>
         {level !== 'default' && (
-          <label className="field-inline">
-            <span>For</span>
-            <select value={duration} onChange={(e) => setDuration(e.target.value as Duration)}>
-              <option value="forever">Until I change it</option>
-              <option value="1h">1 hour</option>
-              <option value="8h">8 hours</option>
-              <option value="24h">24 hours</option>
-            </select>
-          </label>
+          <div className="duration" role="radiogroup" aria-label="For how long">
+            <span className="duration-title">For how long</span>
+            <div className="segmented">
+              {DURATIONS.map((d) => (
+                <label key={d.value} className={duration === d.value ? 'on' : undefined}>
+                  <input
+                    type="radio"
+                    name="duration"
+                    value={d.value}
+                    checked={duration === d.value}
+                    onChange={() => setDuration(d.value)}
+                  />
+                  {d.label}
+                </label>
+              ))}
+            </div>
+          </div>
         )}
         {current?.until && (
-          <p className="muted">
-            Set until{' '}
+          <p className="muted until-note">
+            Now set until{' '}
             {new Date(current.until).toLocaleString([], {
               weekday: 'short',
               hour: '2-digit',
@@ -121,12 +159,15 @@ export function NotificationMenu({
             .
           </p>
         )}
-        <div className="row-buttons">
+        <FormMessage text={error} />
+        <div className="popover-actions">
+          <button type="button" className="secondary" onClick={onClose}>
+            Cancel
+          </button>
           <button type="submit" disabled={busy}>
             Save
           </button>
         </div>
-        <FormMessage text={error} />
       </form>
     </Popover>
   )

@@ -25,3 +25,22 @@ export const putNotificationSetting = (
 /** Back to the default (the community's level for a channel, else every message). */
 export const clearNotificationSetting = (type: LevelTarget, id: string) =>
   request<void>(`/api/notification-settings/${type}/${id}`, { method: 'DELETE' })
+
+/** A message that notified the user, as the bell's list shows it (ADR 0019). */
+export type RecentNotification = {
+  message_id: string
+  channel_id: string
+  channel_name: string
+  author: { id: string; display_name: string; avatar?: number | null }
+  text: string
+  inserted_at: string
+  unread: boolean
+  mentioned: boolean
+}
+
+export const listRecentNotifications = async (communityId: string) =>
+  (
+    await request<{ notifications: RecentNotification[] }>(
+      `/api/communities/${communityId}/notifications`,
+    )
+  ).notifications

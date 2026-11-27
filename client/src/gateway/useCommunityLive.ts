@@ -11,6 +11,8 @@ type Handler = (event: LiveEvent) => void
 
 export type CommunityLive = {
   online: OnlineMember[]
+  /** The first presence list has arrived (until then everyone looks offline). */
+  synced: boolean
   /** Increases on every (re)join; components reload what they may have missed. */
   generation: number
   setVoiceChannel: (channelId: string | null) => void
@@ -21,6 +23,7 @@ export function useCommunityLive(communityId: string, onRemoved: () => void): Co
   // Shared with an ongoing call in the same community (see sharing()).
   const connect = sharing(useContext(GatewayContext))
   const [online, setOnline] = useState<OnlineMember[]>([])
+  const [synced, setSynced] = useState(false)
   const [generation, setGeneration] = useState(0)
   const connection = useRef<CommunityConnection>(undefined)
   const handlers = useRef(new Set<Handler>())
@@ -32,7 +35,10 @@ export function useCommunityLive(communityId: string, onRemoved: () => void): Co
 
   useEffect(() => {
     const conn = connect(communityId, {
-      presence: setOnline,
+      presence: (members) => {
+        setOnline(members)
+        setSynced(true)
+      },
       event: (event) => handlers.current.forEach((h) => h(event)),
       joined: () => setGeneration((g) => g + 1),
       removed: () => removed.current(),
@@ -55,5 +61,5 @@ export function useCommunityLive(communityId: string, onRemoved: () => void): Co
     }
   }, [])
 
-  return { online, generation, setVoiceChannel, subscribe }
+  return { online, synced, generation, setVoiceChannel, subscribe }
 }
