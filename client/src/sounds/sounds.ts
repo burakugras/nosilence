@@ -24,7 +24,7 @@ import { channelLevel, conversationLevel, notifies } from '../notifications/leve
 import { myStatusChoice } from '../presence/myProfile'
 import { isBlocked } from '../social/blockedStore'
 import { openChannelId } from '../communities/communityList'
-import { synthesize, type SoundName } from './engine'
+import { synthesize, warmUp, type SoundName } from './engine'
 
 export type SoundSettings = { volume: number; voice: boolean; messages: boolean }
 
@@ -130,6 +130,19 @@ const inFront = () => document.hasFocus() && !document.hidden
  */
 export function startSounds(userId: string): () => void {
   const stops: (() => void)[] = []
+
+  // The first click or key wakes the audio, before any sound needs it.
+  const wake = () => {
+    warmUp()
+    window.removeEventListener('pointerdown', wake)
+    window.removeEventListener('keydown', wake)
+  }
+  window.addEventListener('pointerdown', wake)
+  window.addEventListener('keydown', wake)
+  stops.push(() => {
+    window.removeEventListener('pointerdown', wake)
+    window.removeEventListener('keydown', wake)
+  })
 
   let controls = getControls()
   stops.push(

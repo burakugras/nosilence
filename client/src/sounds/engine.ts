@@ -39,7 +39,7 @@ function makeRoom(c: AudioContext, seconds = 1.6) {
   return conv
 }
 
-function audio(volume: number): AudioContext | undefined {
+function context(): AudioContext | undefined {
   if (typeof AudioContext === 'undefined') return undefined
   if (!ctx) {
     ctx = new AudioContext()
@@ -53,10 +53,17 @@ function audio(volume: number): AudioContext | undefined {
     room.gain.value = 0.32
     room.connect(makeRoom(ctx)).connect(master)
   }
-  // Browsers start audio suspended until the page has been used.
-  if (ctx.state === 'suspended') void ctx.resume().catch(() => undefined)
-  master!.gain.value = volume
   return ctx
+}
+
+/**
+ * Wakes the audio up ahead of the first sound (called on the user's first
+ * click or key). A context that starts while a sound is being scheduled jumps
+ * forward in time and skips the notes' soft start, which clicks.
+ */
+export function warmUp() {
+  const c = context()
+  if (c && c.state !== 'running') void c.resume().catch(() => undefined)
 }
 
 type Note = {
@@ -88,7 +95,7 @@ function soft(c: AudioContext, n: Note) {
     filterTo,
     sweep = 0.22,
   } = n
-  const t = c.currentTime + 0.02 + at
+  const t = c.currentTime + LOOKAHEAD + at
   const lp = c.createBiquadFilter()
   lp.type = 'lowpass'
   lp.Q.value = 0.7
@@ -121,6 +128,9 @@ function soft(c: AudioContext, n: Note) {
       o.stop(t + dur + 0.05)
     }
 }
+
+// Notes start a little ahead, so the audio thread never begins one late.
+const LOOKAHEAD = 0.06
 
 // Notes (Hz) of a pentatonic scale, so any two of them sound well together.
 const N = { G4: 392, C5: 523.25, D5: 587.33, E5: 659.25, G5: 783.99, C6: 1046.5, G6: 1567.98 }
@@ -169,10 +179,23 @@ const SOUNDS: Record<SoundName, Note[]> = {
   ],
 }
 
-/** Plays a sound at `volume` (0 to 1). Does nothing where audio is unavailable. */
+/**
+ * Plays a sound at `volume` (0 to 1). Does nothing where audio is unavailable.
+ * Notes are scheduled only once the audio runs, so none starts mid-way.
+ */
 export function synthesize(name: SoundName, volume: number) {
   if (volume <= 0) return
-  const c = audio(volume)
+  const c = context()
   if (!c) return
-  for (const n of SOUNDS[name]) soft(c, n)
+  const start = () => {
+    // A volume change glides instead of jumping (a jump clicks too).
+    master!.gain.setTargetAtTime(volume, c.currentTime, 0.01)
+    for (const n of SOUNDS[name]) soft(c, n)
+  }
+  if (c.state === 'running') start()
+  else
+    void c
+      .resume()
+      .then(start)
+      .catch(() => undefined)
 }

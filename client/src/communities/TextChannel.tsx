@@ -420,8 +420,9 @@ export function TextChannel({
     if (wait.secondsLeft > 0) return
     const error = messageError(text)
     if (error) return setMessage(error)
+    // The last error stays until the send succeeds: clearing it first made it
+    // vanish and come back on every try, and the page jumped.
     setSending(true)
-    setMessage(undefined)
     try {
       const sentMessage = await api.send(
         channel.id,
@@ -433,6 +434,7 @@ export function TextChannel({
       update((ms) => merge(ms, [sentMessage]))
       setSent((n) => n + 1)
       setText('')
+      setMessage(undefined)
     } catch (e) {
       if (e instanceof ApiError && e.retryAfter) {
         // Keep the text; show a countdown instead of an error that goes stale.
