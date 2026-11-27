@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { describe, expect, it, vi } from 'vitest'
 import type { Message } from '../api/messages'
 import type { LiveEvent } from '../gateway/types'
+import { setBlockedForTests } from '../social/blockedStore'
 import { TextChannel, type MessageApi } from './TextChannel'
 
 const message = (over: Partial<Message> = {}): Message => ({
@@ -120,5 +121,19 @@ describe('reactions and mentions in the chat (ADR 0017)', () => {
       fireEvent.keyDown(box, { key: 'Enter' })
     })
     expect(api.send).toHaveBeenCalledWith('t1', 'hey @cem', { mentions: ['c'], mention: null })
+  })
+
+  it('people the user blocked are not suggested, and their mentions do not stand out (ADR 0019)', async () => {
+    setBlockedForTests(['c'])
+    try {
+      setup()
+      const text = await screen.findByText('@ayse')
+      expect(text.closest('li')).not.toHaveClass('mentions-me')
+      const box = screen.getByRole('textbox', { name: 'Message #general' })
+      fireEvent.change(box, { target: { value: '@ce', selectionStart: 3 } })
+      expect(screen.queryByRole('listbox')).toBeNull()
+    } finally {
+      setBlockedForTests([])
+    }
   })
 })

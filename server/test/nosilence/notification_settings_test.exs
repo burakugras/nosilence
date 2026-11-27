@@ -5,7 +5,7 @@ defmodule Nosilence.NotificationSettingsTest do
   import Nosilence.AccountsFixtures
   import Nosilence.CommunitiesFixtures
 
-  alias Nosilence.{Messaging, NotificationSettings, Social}
+  alias Nosilence.{Communities, Messaging, NotificationSettings, Social}
 
   setup do
     owner = confirmed_user_fixture(%{"display_name" => "Owner"})
@@ -124,5 +124,60 @@ defmodule Nosilence.NotificationSettingsTest do
     assert {:ok, %{names: ["Member", "Owner"], total: 2}} = Messaging.reactors(m, msg.id, "👍")
     assert {:ok, %{names: [], total: 0}} = Messaging.reactors(m, msg.id, "🎉")
     assert {:error, :not_found} = Messaging.reactors(confirmed_user_fixture(), msg.id, "👍")
+  end
+
+  describe "blocks and the bell's list (ADR 0019)" do
+    test "a mention of someone who blocked the author is dropped without a trace", ctx do
+      %{text_channel: ch, owner: o, member: m} = ctx
+      :ok = Social.block(o, m.id)
+
+      # The member can still type the owner's name; it just never reaches them.
+      assert {:ok, msg} = Messaging.send_message(m, ch.id, "hi @owner", %{"mentions" => [o.id]})
+      assert msg.mentions == []
+      # Mentions from people the owner blocked never count, everyone/here included.
+      :ok = Communities.set_role(o, ctx.community.id, m.id, "moderator")
+      {:ok, _} = Messaging.send_message(m, ch.id, "@everyone", %{"mention" => "everyone"})
+      assert Messaging.mention_counts(o, [ch.id]) == %{ch.id => 0}
+    end
+
+    test "the last 10 messages that notify, newest first, with unread and mentions", ctx do
+      %{community: c, text_channel: ch, owner: o, member: m} = ctx
+      # Straight into the table: twelve sends in a row would hit the rate limit.
+      for i <- 1..12,
+          do:
+            Nosilence.Repo.insert!(%Nosilence.Messaging.Message{
+              channel_id: ch.id,
+              author_id: o.id,
+              content: "note #{i}"
+            })
+
+      # Writing marks the channel read: the member's own message comes first.
+      {:ok, _} = Messaging.send_message(m, ch.id, "my own")
+      {:ok, _} = Messaging.send_message(o, ch.id, "hey @member", %{"mentions" => [m.id]})
+
+      assert {:ok, list} = Messaging.recent_notifications(m, c.id)
+      assert length(list) == 10
+
+      assert [%{text: "hey @member", mentioned: true, unread: true, channel_name: "general"} | _] =
+               list
+
+      refute Enum.any?(list, &(&1.text == "my own"))
+
+      # Only mentions: just the mention is left.
+      :ok = NotificationSettings.put(m, "community", c.id, %{"level" => "mentions"})
+      assert {:ok, [%{text: "hey @member"}]} = Messaging.recent_notifications(m, c.id)
+
+      :ok = NotificationSettings.put(m, "channel", ch.id, %{"level" => "none"})
+      assert {:ok, []} = Messaging.recent_notifications(m, c.id)
+
+      assert {:error, :not_found} = Messaging.recent_notifications(confirmed_user_fixture(), c.id)
+    end
+
+    test "messages from people the user blocked are not in the list", ctx do
+      %{community: c, text_channel: ch, owner: o, member: m} = ctx
+      {:ok, _} = Messaging.send_message(o, ch.id, "from the owner")
+      :ok = Social.block(m, o.id)
+      assert {:ok, []} = Messaging.recent_notifications(m, c.id)
+    end
   end
 end

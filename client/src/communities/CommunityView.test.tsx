@@ -302,8 +302,9 @@ describe('a community', () => {
     expect(
       screen.getByRole('button', { name: 'Notifications for Ekip, 11 new' }),
     ).toHaveTextContent('10+')
+    // The bell lists the last notifications; the levels are in the name's menu.
     fireEvent.click(screen.getByRole('button', { name: /^Notifications for Ekip/ }))
-    expect(screen.getByRole('dialog', { name: 'Notifications for Ekip' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Notifications in Ekip' })).toBeInTheDocument()
   })
 
   it('opens the text channel in the address', async () => {

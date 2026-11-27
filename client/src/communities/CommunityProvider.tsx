@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { isBlocked } from '../social/blockedStore'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   getCommunity,
@@ -122,6 +123,7 @@ export function CommunityProvider({
           event.type === 'message_created' &&
           event.message.channel_id !== openTextId &&
           event.message.author?.id !== currentUserId &&
+          !isBlocked(event.message.author?.id) &&
           (!!event.message.mention || (event.message.mentions ?? []).includes(currentUserId))
         )
           setMentions((m) => ({

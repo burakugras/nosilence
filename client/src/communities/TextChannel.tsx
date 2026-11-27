@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useBlocked } from '../social/blockedStore'
 import {
   useCallback,
   useEffect,
@@ -447,10 +448,11 @@ export function TextChannel({
     }
   }
 
-  // Everyone but the writer.
+  // Everyone but the writer and the people they blocked (ADR 0019).
+  const blocked = useBlocked()
   const suggested = typing
     ? suggestions(
-        people.filter((p) => p.id !== currentUserId),
+        people.filter((p) => p.id !== currentUserId && !blocked.has(p.id)),
         typing.query,
         canMentionEveryone,
       )
@@ -572,8 +574,10 @@ export function TextChannel({
                 m.id !== firstUnseenId &&
                 new Date(m.inserted_at).getTime() - new Date(prev.inserted_at).getTime() < GROUP_MS
               const name = m.author?.display_name ?? 'Deleted user'
+              // A mention from someone the reader blocked does not stand out.
               const mentionsMe =
                 m.author?.id !== currentUserId &&
+                !blocked.has(m.author?.id ?? '') &&
                 (!!m.mention || (m.mentions ?? []).includes(currentUserId))
               return (
                 <li

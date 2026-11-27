@@ -139,4 +139,12 @@ defmodule NosilenceWeb.Gateway.UserChannelTest do
       assert_push "friend_presence", %{user_id: ^member_id, metas: []}
     end
   end
+
+  test "no notifications from people the user blocked (ADR 0019)", ctx do
+    join_own(ctx.member)
+    :ok = Nosilence.Social.block(ctx.member, ctx.owner.id)
+    assert_push "friends_changed", %{}
+    {:ok, _} = Messaging.send_message(ctx.owner, ctx.text_channel.id, "blocked hello")
+    refute_push "notify", %{text: "blocked hello"}
+  end
 end

@@ -64,6 +64,7 @@ defmodule NosilenceWeb.Router do
     get "/communities/:id", CommunityController, :show
     delete "/communities/:id", CommunityController, :delete
     get "/communities/:id/members", CommunityController, :members
+    get "/communities/:id/notifications", CommunityController, :notifications
     delete "/communities/:id/members/:user_id", CommunityController, :remove_member
     patch "/communities/:id/members/:user_id", CommunityController, :set_role
     delete "/communities/:id/voice/:user_id", CommunityController, :disconnect_voice

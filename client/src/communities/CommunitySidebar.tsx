@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { NotificationList } from '../notifications/NotificationList'
 import type { Level } from '../api/notificationSettings'
 import { channelLevel, communityLevel, useLevels } from '../notifications/levels'
 import { NotificationMenu } from '../notifications/NotificationMenu'
@@ -84,8 +85,9 @@ export function CommunitySidebar({
           <span>{community.name}</span>
           <Icon name="chevron" />
         </button>
-        {/* Burak's choice: the community's notifications one click away, with
-            how many unread messages would notify at its levels (ADR 0018). */}
+        {/* Burak's choice: the last notifications one click away, with how many
+            unread messages would notify at the levels (ADR 0018, 0019). The
+            levels themselves are in the community name's menu. */}
         <button
           type="button"
           className="icon-button header-bell"
@@ -106,10 +108,9 @@ export function CommunitySidebar({
       </div>
       {menuAnchor && <CommunityMenu anchor={menuAnchor} onClose={() => setMenuAnchor(null)} />}
       {communityBell && (
-        <NotificationMenu
-          type="community"
-          id={community.id}
-          name={community.name}
+        <NotificationList
+          communityId={community.id}
+          communityName={community.name}
           anchor={communityBell}
           onClose={() => setCommunityBell(null)}
         />

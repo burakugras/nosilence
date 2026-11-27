@@ -69,6 +69,11 @@ defmodule NosilenceWeb.CommunityController do
     end
   end
 
+  def notifications(conn, %{"id" => id}) do
+    with {:ok, list} <- Nosilence.Messaging.recent_notifications(conn.assigns.current_user, id),
+         do: json(conn, %{notifications: list})
+  end
+
   def delete(conn, %{"id" => id}) do
     with {:ok, %{voice_rooms: rooms}} <-
            Communities.delete_community(conn.assigns.current_user, id) do
