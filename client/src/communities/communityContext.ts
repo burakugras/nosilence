@@ -22,6 +22,11 @@ export type CommunityView = {
   /** Presence of members connected right now, by id (status, picture, voice). */
   presence: Map<string, OnlineMember>
   members: Member[]
+  /**
+   * The members list and the first presence have both arrived: until then the
+   * members column stays empty instead of showing wrong counts.
+   */
+  membersReady: boolean
   /** Members who can be mentioned with @username (ADR 0017). */
   people: Mentionable[]
   /** Unread messages per text channel. */

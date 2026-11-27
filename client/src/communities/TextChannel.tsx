@@ -159,6 +159,9 @@ export function TextChannel({
   // and sending go to the end; loading older messages keeps the place.
   const list = useRef<HTMLOListElement>(null)
   const scrollToEnd = useRef(false)
+  // Counts the user's sends: the live copy of their own message often arrives
+  // before the reply, so the last message may not change when the reply comes.
+  const [sent, setSent] = useState(0)
   // Set by the first load: where the user had stopped reading (ADR 0010).
   const opening = useRef<{ read: ReadPosition } | null>(null)
   // More unread messages above the loaded page ("50+").
@@ -269,7 +272,7 @@ export function TextChannel({
       if (noneUnseen) setFirstUnseenId(outOfSight[0])
       setUnseenIds((ids) => [...ids, ...outOfSight])
     }
-  }, [lastId, noneUnseen])
+  }, [lastId, noneUnseen, sent])
 
   useLayoutEffect(() => {
     const el = list.current
@@ -419,14 +422,15 @@ export function TextChannel({
     setSending(true)
     setMessage(undefined)
     try {
-      const sent = await api.send(
+      const sentMessage = await api.send(
         channel.id,
         text.trim(),
         mentionsIn(text, people, canMentionEveryone),
       )
       // Your own message always brings you to the end.
       scrollToEnd.current = true
-      update((ms) => merge(ms, [sent]))
+      update((ms) => merge(ms, [sentMessage]))
+      setSent((n) => n + 1)
       setText('')
     } catch (e) {
       if (e instanceof ApiError && e.retryAfter) {

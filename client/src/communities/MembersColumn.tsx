@@ -19,7 +19,7 @@ import { outranks } from './roles'
  * Clicking someone opens a card with what can be done with them.
  */
 export function MembersColumn() {
-  const { members, online, presence } = useCommunity()
+  const { members, online, presence, membersReady } = useCommunity()
   const [card, setCard] = useState<{ member: Member; anchor: HTMLElement } | null>(null)
   const on = members.filter((m) => online.has(m.user_id))
   const off = members.filter((m) => !online.has(m.user_id))
@@ -47,6 +47,9 @@ export function MembersColumn() {
       </li>
     )
   }
+
+  // Nothing until the list and who is online are known: no "Online — 0" flash.
+  if (!membersReady) return <aside className="members" aria-label="Members" aria-busy="true" />
 
   return (
     <aside className="members" aria-label="Members">

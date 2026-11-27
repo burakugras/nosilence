@@ -87,7 +87,11 @@ function fakeGateway() {
   const state: { listener?: CommunityListener } = {}
   const connect: ConnectCommunity = (_id, listener) => {
     state.listener = listener
-    queueMicrotask(() => listener.joined())
+    // As the server: a join is followed by the presence list.
+    queueMicrotask(() => {
+      listener.joined()
+      listener.presence([])
+    })
     return { setVoiceChannel: () => {}, close: () => {} }
   }
   return { connect, state }

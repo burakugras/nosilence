@@ -87,7 +87,9 @@ export function AppLayout({
   const community = COMMUNITY_PATH.exec(path)
   const conversation = CONVERSATION_PATH.exec(path)
 
-  const layout = (side: ReactNode, main: ReactNode, members: boolean) => (
+  // `members`: the members column, or 'placeholder' for its empty place while
+  // a community loads (the page does not jump when it appears).
+  const layout = (side: ReactNode, main: ReactNode, members: boolean | 'placeholder') => (
     <div
       className={[
         'app-layout',
@@ -108,7 +110,13 @@ export function AppLayout({
         {!isDesktop && <NotificationPrompt />}
         {main}
       </main>
-      {members && (!membersHidden || membersOpen) && <MembersColumn />}
+      {members &&
+        (!membersHidden || membersOpen) &&
+        (members === 'placeholder' ? (
+          <aside className="members" aria-label="Members" aria-busy="true" />
+        ) : (
+          <MembersColumn />
+        ))}
     </div>
   )
 
@@ -126,7 +134,7 @@ export function AppLayout({
           <p className="empty" role="status">
             Loading…
           </p>,
-          false,
+          'placeholder',
         )}
         notFound={layout(
           home,
