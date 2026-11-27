@@ -121,6 +121,25 @@ defmodule Nosilence.Reactions do
     end)
   end
 
+  @max_names 20
+
+  @doc "Names of the people who put `emoji` on a message (the first 20) and the total."
+  def reactors(kind, message_id, emoji) do
+    query =
+      from r in schema(kind),
+        join: u in Nosilence.Accounts.User,
+        on: u.id == r.user_id,
+        where: r.message_id == ^message_id and r.emoji == ^emoji
+
+    %{
+      names:
+        Repo.all(
+          from [r, u] in query, order_by: r.inserted_at, limit: @max_names, select: u.display_name
+        ),
+      total: Repo.aggregate(query, :count)
+    }
+  end
+
   @doc "The reactions the user added, for their data export."
   def by_user(kind, user_id) do
     Repo.all(

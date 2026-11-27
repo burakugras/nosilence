@@ -94,6 +94,12 @@ defmodule NosilenceWeb.Router do
     delete "/messages/:id", MessageController, :delete
     put "/messages/:id/reactions/:emoji", MessageController, :add_reaction
     delete "/messages/:id/reactions/:emoji", MessageController, :remove_reaction
+    get "/messages/:id/reactions/:emoji", MessageController, :reactors
+
+    # Notification levels (ADR 0018).
+    get "/notification-settings", NotificationSettingsController, :index
+    put "/notification-settings/:type/:id", NotificationSettingsController, :update
+    delete "/notification-settings/:type/:id", NotificationSettingsController, :delete
 
     # Profile picture and status (ADR 0017).
     put "/me/avatar", ProfileController, :set_avatar
@@ -132,6 +138,10 @@ defmodule NosilenceWeb.Router do
     delete "/conversation-messages/:message_id/reactions/:emoji",
            ConversationController,
            :remove_reaction
+
+    get "/conversation-messages/:message_id/reactions/:emoji",
+        ConversationController,
+        :reactors
 
     get "/account/deletion", PrivacyController, :deletion_preview
     delete "/account", PrivacyController, :delete

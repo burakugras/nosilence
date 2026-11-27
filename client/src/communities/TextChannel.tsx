@@ -4,6 +4,7 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  useId,
   useState,
   type FormEvent,
   type KeyboardEvent,
@@ -14,10 +15,13 @@ import {
   deleteMessage,
   editMessage,
   listMessages,
+  listReactors,
   markRead,
   reactToMessage,
   sendMessage,
   type Message,
+  type Reaction,
+  type Reactors,
   type ReadPosition,
 } from '../api/messages'
 import { FormMessage } from '../components/Field'
@@ -30,7 +34,7 @@ import { EmojiPicker } from '../ui/EmojiPicker'
 import { Icon } from '../ui/Icon'
 import { Popover } from '../ui/Popover'
 import { mentionsIn, splitMentions, suggestions, typingMention, type Mentionable } from './mentions'
-import { applyReaction, QUICK_REACTIONS } from './reactions'
+import { applyReaction, QUICK_REACTIONS, reactorsText } from './reactions'
 
 /** Messages by the same person within this time are shown as one group. */
 const GROUP_MS = 5 * 60 * 1000
@@ -76,6 +80,7 @@ export type MessageApi = {
   remove: typeof deleteMessage
   markRead: typeof markRead
   react: typeof reactToMessage
+  reactors: typeof listReactors
 }
 
 const CHANNEL_API: MessageApi = {
@@ -85,6 +90,7 @@ const CHANNEL_API: MessageApi = {
   remove: deleteMessage,
   markRead,
   react: reactToMessage,
+  reactors: listReactors,
 }
 
 type Props = {
@@ -673,16 +679,12 @@ export function TextChannel({
                     {(m.reactions?.length ?? 0) > 0 && (
                       <div className="reactions" aria-label="Reactions">
                         {m.reactions!.map((r) => (
-                          <button
+                          <ReactionButton
                             key={r.emoji}
-                            type="button"
-                            className={r.me ? 'reaction mine' : 'reaction'}
-                            aria-pressed={r.me}
-                            aria-label={`${r.emoji} ${r.count}${r.me ? ', including you' : ''}`}
-                            onClick={() => void toggleReaction(m, r.emoji)}
-                          >
-                            <span aria-hidden="true">{r.emoji}</span> {r.count}
-                          </button>
+                            reaction={r}
+                            load={() => api.reactors(m.id, r.emoji)}
+                            onToggle={() => void toggleReaction(m, r.emoji)}
+                          />
                         ))}
                       </div>
                     )}
@@ -765,6 +767,57 @@ export function TextChannel({
         }
       />
     </section>
+  )
+}
+
+/**
+ * One reaction: clicking puts or takes back the user's; pointing at it or
+ * focusing it shows who reacted (asked from the server the first time).
+ */
+function ReactionButton({
+  reaction: r,
+  load,
+  onToggle,
+}: {
+  reaction: Reaction
+  load: () => Promise<Reactors>
+  onToggle: () => void
+}) {
+  const [who, setWho] = useState<{ count: number; text: string } | null>(null)
+  const [open, setOpen] = useState(false)
+  const tip = useId()
+
+  const show = () => {
+    setOpen(true)
+    // Ask again when the count changed since.
+    if (who?.count === r.count) return
+    load()
+      .then((reactors) => setWho({ count: r.count, text: reactorsText(reactors) }))
+      .catch(() => undefined)
+  }
+
+  return (
+    <span className="reaction-wrap">
+      <button
+        type="button"
+        className={r.me ? 'reaction mine' : 'reaction'}
+        aria-pressed={r.me}
+        aria-label={`${r.emoji} ${r.count}${r.me ? ', including you' : ''}`}
+        aria-describedby={open && who ? tip : undefined}
+        onClick={onToggle}
+        onMouseEnter={show}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={show}
+        onBlur={() => setOpen(false)}
+      >
+        <span aria-hidden="true">{r.emoji}</span> {r.count}
+      </button>
+      {open && who && (
+        <span id={tip} role="tooltip" className="reaction-tooltip">
+          {who.text} reacted with {r.emoji}
+        </span>
+      )}
+    </span>
   )
 }
 

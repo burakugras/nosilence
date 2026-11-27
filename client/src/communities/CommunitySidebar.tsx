@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { channelLevel, communityLevel, useLevels } from '../notifications/levels'
+import { NotificationMenu } from '../notifications/NotificationMenu'
 import { useState } from 'react'
 import { deleteCommunity, disconnectVoice, leaveCommunity, type Channel } from '../api/communities'
 import { ApiError } from '../api/http'
@@ -26,7 +28,10 @@ export function CommunitySidebar({
   join?: typeof requestChannelJoin
 }) {
   const view = useCommunity()
-  const { community, channels, live, currentUserId, canModerate, unread, openTextId } = view
+  const { community, channels, live, currentUserId, canModerate, unread, mentions, openTextId } =
+    view
+  useLevels()
+  const [bell, setBell] = useState<{ channel: Channel; anchor: HTMLElement } | null>(null)
   const call = useCall()
   const { speaking } = useCallState()
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null)
@@ -76,22 +81,49 @@ export function CommunitySidebar({
         <ul className="plain-list" aria-label="Text channels">
           {text.map((c) => {
             const count = unread[c.id] ?? 0
+            const mentioned = mentions[c.id] ?? 0
+            const level = channelLevel(community.id, c.id)
+            const muted = level === 'none'
             return (
-              <li key={c.id}>
+              <li key={c.id} className="channel-entry">
                 <Link
                   to={`/c/${community.id}/${c.id}`}
-                  className={count > 0 ? 'side-item unread' : 'side-item'}
+                  className={['side-item', count > 0 && !muted && 'unread', muted && 'muted']
+                    .filter(Boolean)
+                    .join(' ')}
                   aria-current={c.id === openTextId ? 'page' : undefined}
-                  aria-label={count > 0 ? `#${c.name}, ${count} unread` : `#${c.name}`}
+                  aria-label={
+                    `#${c.name}` +
+                    (mentioned > 0 ? `, ${mentioned} mentions` : '') +
+                    (count > 0 ? `, ${count} unread` : '') +
+                    (muted ? ', muted' : '')
+                  }
                 >
                   <Icon name="hash" />
                   <span className="name">{c.name}</span>
-                  {count > 0 && (
-                    <span className="unread-count" aria-hidden="true">
-                      {count >= 100 ? '99+' : count}
+                  {mentioned > 0 ? (
+                    <span className="unread-count mention-count" aria-hidden="true">
+                      {mentioned >= 100 ? '99+' : mentioned}
                     </span>
+                  ) : (
+                    count > 0 &&
+                    !muted && (
+                      <span className="unread-count" aria-hidden="true">
+                        {count >= 100 ? '99+' : count}
+                      </span>
+                    )
                   )}
                 </Link>
+                <button
+                  type="button"
+                  className="icon-button channel-bell"
+                  aria-label={`Notifications for #${c.name}`}
+                  aria-haspopup="dialog"
+                  title="Notifications"
+                  onClick={(e) => setBell({ channel: c, anchor: e.currentTarget })}
+                >
+                  <Icon name={level === 'all' ? 'bell' : 'bellOff'} />
+                </button>
               </li>
             )
           })}
@@ -154,14 +186,38 @@ export function CommunitySidebar({
         </ul>
         <FormMessage text={message} />
       </nav>
+      {bell && (
+        <NotificationMenu
+          type="channel"
+          id={bell.channel.id}
+          name={`#${bell.channel.name}`}
+          defaultLabel={LEVEL_LABEL[communityLevel(community.id)]}
+          anchor={bell.anchor}
+          onClose={() => setBell(null)}
+        />
+      )}
     </>
   )
 }
+
+const LEVEL_LABEL = { all: 'all messages', mentions: 'only mentions', none: 'nothing' } as const
 
 /** The community name's menu: invite, settings, leave or delete. */
 function CommunityMenu({ anchor, onClose }: { anchor: HTMLElement; onClose: () => void }) {
   const { community, isOwner, canModerate } = useCommunity()
   const [error, setError] = useState<string>()
+  const [notifications, setNotifications] = useState(false)
+
+  if (notifications)
+    return (
+      <NotificationMenu
+        type="community"
+        id={community.id}
+        name={community.name}
+        anchor={anchor}
+        onClose={onClose}
+      />
+    )
 
   async function leaveOrDelete() {
     const sure = window.confirm(
@@ -197,7 +253,10 @@ function CommunityMenu({ anchor, onClose }: { anchor: HTMLElement; onClose: () =
           <Icon name="gear" /> Community settings
         </button>
       )}
-      {canModerate && <hr />}
+      <button type="button" onClick={() => setNotifications(true)}>
+        <Icon name="bell" /> Notification settings
+      </button>
+      <hr />
       <button type="button" className="danger-item" onClick={() => void leaveOrDelete()}>
         <Icon name="leave" /> {isOwner ? 'Delete community' : 'Leave community'}
       </button>

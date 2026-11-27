@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { onDeepLink } from './platform'
+import { inviteToken } from './communities/inviteLink'
+import { followLevels } from './notifications/levels'
 import { startIdleWatch } from './presence/idle'
 import { clearMyProfile, setMyProfile } from './presence/myProfile'
 import { useEffect, useState, type ReactNode } from 'react'
@@ -43,6 +46,16 @@ export default function App({ loadUser = currentUser }: Props) {
 
   // Desktop: look for updates, signed in or not (ADR 0014).
   useEffect(checkOnStart, [])
+  // Desktop: a nosilence:// invite link opens the invite, which still asks
+  // before joining (ADR 0018). Signed out, it continues after signing in.
+  useEffect(
+    () =>
+      onDeepLink((url) => {
+        const token = inviteToken(url)
+        if (token) navigate(`/invite?token=${encodeURIComponent(token)}`)
+      }),
+    [],
+  )
 
   // The user's own live topic (friends, conversations; ADR 0015), the lists
   // behind the unread badges, and on the desktop notifications for others'
@@ -54,6 +67,7 @@ export default function App({ loadUser = currentUser }: Props) {
     else clearMyProfile()
   }, [user])
   useEffect(() => (userId ? startIdleWatch() : undefined), [userId])
+  useEffect(() => (userId ? followLevels() : undefined), [userId])
   useEffect(() => (userId ? startMessageNotifications(userId) : undefined), [userId])
   useEffect(() => (userId ? followConversations() : undefined), [userId])
   useEffect(() => (userId ? followCommunities() : undefined), [userId])

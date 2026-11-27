@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The main window: core APIs, signed updates and restarting, notifications. Our own commands (token store, Google sign-in, push-to-talk) are defined in src/lib.rs.",
+  "description": "The main window: core APIs, signed updates and restarting, notifications, nosilence:// links. Our own commands (token store, Google sign-in, push-to-talk) are defined in src/lib.rs.",
   "windows": [
     "main"
   ],
@@ -9,6 +9,7 @@
     "core:default",
     "updater:default",
     "process:allow-restart",
-    "notification:default"
+    "notification:default",
+    "deep-link:default"
   ]
 }

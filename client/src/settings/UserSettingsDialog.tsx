@@ -30,7 +30,7 @@ export function UserSettingsDialog({
   const sections: ModalSection[] = [
     { id: 'profile', label: 'Profile' },
     { id: 'voice', label: 'Voice' },
-    ...(isDesktop ? [{ id: 'notifications', label: 'Notifications' }] : []),
+    { id: 'notifications', label: 'Notifications' },
     { id: 'privacy', label: 'Username and privacy' },
     { id: 'appearance', label: 'Appearance' },
     { id: 'account', label: 'Account' },

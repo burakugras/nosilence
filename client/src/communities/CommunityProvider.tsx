@@ -42,6 +42,8 @@ export function CommunityProvider({
   // Unread messages per text channel (ADR 0010): from the server on load, then
   // counted live for the other channels; the open channel reports its own.
   const [unread, setUnread] = useState<Record<string, number>>({})
+  // Unread messages that mention the user, per text channel (ADR 0018).
+  const [mentions, setMentions] = useState<Record<string, number>>({})
 
   const reload = useCallback(() => {
     getCommunity(communityId)
@@ -50,6 +52,11 @@ export function CommunityProvider({
         setUnread(
           Object.fromEntries(
             loaded.channels.flatMap((c) => (c.kind === 'text' ? [[c.id, c.unread ?? 0]] : [])),
+          ),
+        )
+        setMentions(
+          Object.fromEntries(
+            loaded.channels.flatMap((c) => (c.kind === 'text' ? [[c.id, c.mentions ?? 0]] : [])),
           ),
         )
       })
@@ -76,6 +83,18 @@ export function CommunityProvider({
     return () => setOpenChannel(undefined)
   }, [openTextId])
 
+  // The open channel's mentions are on screen: they never count while it is
+  // open (even if a reload brings the server's count back), and stay cleared
+  // after leaving it.
+  useEffect(() => {
+    if (!openTextId) return
+    return () => setMentions((m) => (m[openTextId] ? { ...m, [openTextId]: 0 } : m))
+  }, [openTextId])
+  const shownMentions = useMemo(
+    () => (openTextId && mentions[openTextId] ? { ...mentions, [openTextId]: 0 } : mentions),
+    [mentions, openTextId],
+  )
+
   useEffect(
     () =>
       subscribe((event) => {
@@ -87,6 +106,16 @@ export function CommunityProvider({
           setUnread((u) => ({
             ...u,
             [event.message.channel_id]: (u[event.message.channel_id] ?? 0) + 1,
+          }))
+        if (
+          event.type === 'message_created' &&
+          event.message.channel_id !== openTextId &&
+          event.message.author?.id !== currentUserId &&
+          (!!event.message.mention || (event.message.mentions ?? []).includes(currentUserId))
+        )
+          setMentions((m) => ({
+            ...m,
+            [event.message.channel_id]: (m[event.message.channel_id] ?? 0) + 1,
           }))
         if (event.type === 'member_joined' || event.type === 'member_removed')
           setMembersKey((k) => k + 1)
@@ -108,11 +137,12 @@ export function CommunityProvider({
     [subscribe, openTextId, currentUserId, reload],
   )
 
-  // The rail shows this community's total.
+  // The rail shows this community's totals.
   const total = Object.values(unread).reduce((sum, n) => sum + n, 0)
+  const totalMentions = Object.values(shownMentions).reduce((sum, n) => sum + n, 0)
   useEffect(() => {
-    if (data) setCommunityUnread(communityId, Math.min(100, total))
-  }, [communityId, data, total])
+    if (data) setCommunityUnread(communityId, Math.min(100, total), Math.min(100, totalMentions))
+  }, [communityId, data, total, totalMentions])
 
   const reportUnread = useCallback(
     (count: number) => {
@@ -154,6 +184,7 @@ export function CommunityProvider({
       members,
       people,
       unread,
+      mentions: shownMentions,
       openTextId,
       reportUnread,
       reload,
@@ -168,6 +199,7 @@ export function CommunityProvider({
     members,
     people,
     unread,
+    shownMentions,
     openTextId,
     reportUnread,
     reload,

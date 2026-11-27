@@ -235,6 +235,15 @@ fn show_main(app: &AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // One app at a time (ADR 0018): starting it again, or opening a
+        // nosilence:// link, brings the running window forward; the deep-link
+        // plugin hands the link to it. Must be the first plugin.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            show_main(app)
+        }))
+        // The nosilence:// scheme is registered by the installer (tauri.conf.json),
+        // never at run time: development builds leave the registry alone.
+        .plugin(tauri_plugin_deep_link::init())
         // Signed updates from GitHub Releases, and restarting into them (ADR 0014).
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())

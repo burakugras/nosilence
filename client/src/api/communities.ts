@@ -8,10 +8,20 @@ export type CommunitySummary = {
   role: Role
   /** Unread messages from others in its text channels (the rail; up to 100). */
   unread?: number
+  /** Unread messages that mention the user (up to 100). */
+  mentions?: number
 }
 export type Channel =
   | { id: string; name: string; kind: 'voice'; capacity: number }
-  | { id: string; name: string; kind: 'text'; capacity: null; unread?: number }
+  | {
+      id: string
+      name: string
+      kind: 'text'
+      capacity: null
+      unread?: number
+      /** Unread messages that mention the user (ADR 0018). */
+      mentions?: number
+    }
 export type ChannelKind = Channel['kind']
 export type Member = {
   user_id: string

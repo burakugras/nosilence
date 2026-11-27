@@ -22,6 +22,9 @@ const PATHS = {
   back: 'M15 18l-6-6 6-6',
   invite: 'M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 3a4 4 0 100 8 4 4 0 000-8zM19 8v6M22 11h-6',
   download: 'M12 3v12M7 10l5 5 5-5M5 21h14',
+  bell: 'M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 003.4 0',
+  bellOff:
+    'M3 3l18 18M8.7 3.7A6 6 0 0118 8c0 3 .6 5 1.3 6.4M17 17H3s3-2 3-9c0-.5 0-1 .1-1.4M10.3 21a1.9 1.9 0 003.4 0',
 } as const
 
 export type IconName = keyof typeof PATHS

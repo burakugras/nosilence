@@ -40,3 +40,4 @@ What becomes easier, what becomes harder, what we must do next.
 | [0015](0015-friends-and-conversations.md) | Usernames, friends, blocking and direct and group conversations |
 | [0016](0016-layout.md) | Layout, design tokens and themes |
 | [0017](0017-profiles-mentions-reactions.md) | Profile pictures, status, mentions and reactions |
+| [0018](0018-notification-levels-and-friends-status.md) | Notification levels, mentions on the rail, friends' status and desktop links |

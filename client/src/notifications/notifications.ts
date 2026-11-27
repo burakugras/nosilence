@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 /**
- * Desktop notifications for new messages (ADR 0014). Shown only while the app
- * is in the background, never for the user's own messages. By default the
+ * Notifications for new messages: on the desktop (ADR 0014) and in the browser
+ * (ADR 0018). Shown only while the app is in the background, never for the
+ * user's own messages, and as the levels set for a community, a channel or a
+ * conversation allow; do not disturb silences all of them. By default the
  * notification names the author and channel but not the text: Windows keeps
  * notifications in its history, where anyone at the screen can read them.
  */
@@ -9,7 +11,9 @@ import { myStatusChoice } from '../presence/myProfile'
 import { useSyncExternalStore } from 'react'
 import type { MessageNotice } from '../gateway/types'
 import { onUserEvent } from '../gateway/userLive'
-import { isDesktop, showNotification } from '../platform'
+import { navigate } from '../router'
+import { showNotification } from '../platform'
+import { channelLevel, conversationLevel, notifies } from './levels'
 
 export type NotificationSettings = {
   enabled: boolean
@@ -82,6 +86,7 @@ type DirectMessage = {
   conversation_id: string
   text: string
   author: { id: string; display_name: string } | null
+  mentions?: string[]
 }
 
 /** A direct message notice: the author, and the text only if the user asked for it. */
@@ -98,26 +103,40 @@ export function directMessageNotification(
 }
 
 /**
- * Desktop app, signed in: notify about others' messages in communities and
- * conversations (the user's topic, opened by the app). Returns a stop function.
+ * Signed in: notify about others' messages in communities and conversations
+ * (the user's topic, opened by the app). Returns a stop function.
  */
 export function startMessageNotifications(
   userId: string,
   doNotDisturb: () => boolean = () => myStatusChoice() === 'dnd',
+  show: typeof showNotification = showNotification,
 ): () => void {
-  if (!isDesktop) return () => {}
   return onUserEvent((event, payload) => {
     // Do not disturb (ADR 0017) silences every notification.
     if (doNotDisturb()) return
-    const focused = document.hasFocus()
+    const focused = document.hasFocus() && !document.hidden
     const settings = getNotificationSettings()
-    const shown =
-      event === 'notify'
-        ? noticeToNotification(payload as MessageNotice, settings, focused)
-        : event === 'dm_created' && (payload as DirectMessage).author?.id !== userId
-          ? directMessageNotification(payload as DirectMessage, settings, focused)
-          : null
-    if (shown) void showNotification(shown.title, shown.body).catch(() => undefined)
+    if (event === 'notify') {
+      const notice = payload as MessageNotice
+      const level = channelLevel(notice.community_id, notice.channel_id)
+      if (!notifies(level, !!notice.mentioned)) return
+      const shown = noticeToNotification(notice, settings, focused)
+      if (shown)
+        void show(shown.title, shown.body, () =>
+          navigate(`/c/${notice.community_id}/${notice.channel_id}`),
+        ).catch(() => undefined)
+    }
+    if (event === 'dm_created') {
+      const message = payload as DirectMessage
+      if (message.author?.id === userId) return
+      const level = conversationLevel(message.conversation_id)
+      if (!notifies(level, (message.mentions ?? []).includes(userId))) return
+      const shown = directMessageNotification(message, settings, focused)
+      if (shown)
+        void show(shown.title, shown.body, () =>
+          navigate(`/messages/${message.conversation_id}`),
+        ).catch(() => undefined)
+    }
   })
 }
 

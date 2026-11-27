@@ -50,7 +50,7 @@ function releaseSocket() {
   }
 }
 
-// Idle (ADR 0017): reported on every community topic this app has joined.
+// Idle (ADR 0017): reported on every community topic and the user's own topic.
 let idle = false
 const communityChannels = new Set<ReturnType<Socket['channel']>>()
 
@@ -144,6 +144,9 @@ const USER_EVENTS = [
   'dm_deleted',
   'dm_reaction_changed',
   'profile_changed',
+  'notification_settings_changed',
+  'friends_presence',
+  'friend_presence',
 ] as const
 export type UserEventName = (typeof USER_EVENTS)[number] | 'joined'
 
@@ -161,14 +164,20 @@ export function openUserTopic(
   let channel: ReturnType<Socket['channel']> | undefined
   void acquireSocket().then((s) => {
     if (closed) return releaseSocket()
-    channel = s.channel(`user:${userId}`)
-    for (const name of USER_EVENTS) channel.on(name, (payload) => onEvent(name, payload))
-    channel.join().receive('ok', () => onEvent('joined', null))
+    const ch = s.channel(`user:${userId}`)
+    channel = ch
+    for (const name of USER_EVENTS) ch.on(name, (payload) => onEvent(name, payload))
+    communityChannels.add(ch)
+    ch.join().receive('ok', () => {
+      if (idle) ch.push('activity', { idle })
+      onEvent('joined', null)
+    })
   })
   return () => {
     if (closed) return
     closed = true
     if (channel) {
+      communityChannels.delete(channel)
       channel.leave()
       releaseSocket()
     }

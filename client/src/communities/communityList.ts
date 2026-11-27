@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 /**
- * The user's communities for the rail (ADR 0016), with unread counts. New
- * messages arrive on the user's own topic (`notify`); the channel on screen
- * does not count.
+ * The user's communities for the rail (ADR 0016), with unread and mention
+ * counts (ADR 0018). New messages arrive on the user's own topic (`notify`);
+ * the channel on screen does not count.
  */
 import { useSyncExternalStore } from 'react'
 import { listCommunities, type CommunitySummary } from '../api/communities'
@@ -31,12 +31,12 @@ export function setOpenChannel(channelId: string | undefined) {
   openChannelId = channelId
 }
 
-/** Unread count for one community, as the community view knows it best. */
-export function setCommunityUnread(communityId: string, unread: number) {
+/** Unread and mention counts for one community, as the community view knows them best. */
+export function setCommunityUnread(communityId: string, unread: number, mentions = 0) {
   if (!list) return
   const current = list.find((c) => c.id === communityId)
-  if (current && current.unread !== unread)
-    set(list.map((c) => (c.id === communityId ? { ...c, unread } : c)))
+  if (current && (current.unread !== unread || (current.mentions ?? 0) !== mentions))
+    set(list.map((c) => (c.id === communityId ? { ...c, unread, mentions } : c)))
 }
 
 /** While signed in: load, then count new messages. Returns a stop function. */
@@ -50,7 +50,13 @@ export function followCommunities(): () => void {
     if (!list.some((c) => c.id === notice.community_id)) return void refreshCommunities()
     set(
       list.map((c) =>
-        c.id === notice.community_id ? { ...c, unread: Math.min(100, (c.unread ?? 0) + 1) } : c,
+        c.id === notice.community_id
+          ? {
+              ...c,
+              unread: Math.min(100, (c.unread ?? 0) + 1),
+              mentions: Math.min(100, (c.mentions ?? 0) + (notice.mentioned ? 1 : 0)),
+            }
+          : c,
       ),
     )
   })

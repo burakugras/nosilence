@@ -80,6 +80,8 @@ export const conversationApi: MessageApi = {
         })
       ).message,
     ),
+  reactors: (messageId, emoji) =>
+    request(`/api/conversation-messages/${messageId}/reactions/${encodeURIComponent(emoji)}`),
   react: (messageId, emoji, add) =>
     request<void>(
       `/api/conversation-messages/${messageId}/reactions/${encodeURIComponent(emoji)}`,

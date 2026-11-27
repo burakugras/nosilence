@@ -155,6 +155,24 @@ defmodule Nosilence.Social do
 
   def friends?(a_id, b_id), do: match?(%Friendship{status: "accepted"}, friendship(a_id, b_id))
 
+  @doc "Ids of the user's friends (accepted friendships)."
+  def friend_ids(user_id) do
+    Repo.all(
+      from f in Friendship,
+        where:
+          f.status == "accepted" and (f.user_low_id == ^user_id or f.user_high_id == ^user_id),
+        select:
+          fragment(
+            "CASE WHEN ? = ? THEN ? ELSE ? END",
+            f.user_low_id,
+            type(^user_id, Ecto.UUID),
+            f.user_high_id,
+            f.user_low_id
+          )
+    )
+    |> Enum.map(&Ecto.UUID.cast!/1)
+  end
+
   ## Blocking
 
   @doc "Blocks `other_id`: ends any friendship or request between them."
@@ -583,6 +601,21 @@ defmodule Nosilence.Social do
         on: m2.community_id == m1.community_id,
         where: m1.user_id == ^a_id and m2.user_id == ^b_id
     )
+  end
+
+  @doc "True if the user is in the conversation."
+  def member?(%User{} = user, conversation_id),
+    do: match?({:ok, _}, member_of(user, conversation_id))
+
+  @doc "Who put `emoji` on a conversation message (as `Messaging.reactors/3`)."
+  def reactors(%User{} = user, message_id, emoji) do
+    with {:ok, id} <- Ecto.UUID.cast(message_id),
+         %ConversationMessage{} = m <- Repo.get(ConversationMessage, id),
+         {:ok, _} <- member_of(user, m.conversation_id) do
+      {:ok, Reactions.reactors(:conversation, m.id, emoji)}
+    else
+      _ -> {:error, :not_found}
+    end
   end
 
   @doc "True if the two people are in a conversation together."

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useFriendsPresence } from '../presence/friendsPresence'
 import { Link } from '../components/Link'
 import { conversationTitle, useConversations } from '../social/conversationsStore'
 import { Avatar } from '../ui/Avatar'
@@ -6,6 +7,7 @@ import { Icon } from '../ui/Icon'
 
 /** Home's channel column: friends and direct messages (ADR 0016). */
 export function HomeSidebar({ path, currentUserId }: { path: string; currentUserId: string }) {
+  const presence = useFriendsPresence()
   const conversations = useConversations()
   return (
     <>
@@ -53,6 +55,8 @@ export function HomeSidebar({ path, currentUserId }: { path: string; currentUser
                     name={other.display_name}
                     size="small"
                     avatar={other.avatar}
+                    // Only friends' status is known here; no dot rather than a wrong one.
+                    status={presence.get(other.id)?.status}
                   />
                 )}
                 <span className="name">{title}</span>

@@ -160,6 +160,29 @@ defmodule Nosilence.Messaging do
     end)
   end
 
+  @doc """
+  Unread messages from others that mention the user (by name, or everyone/here),
+  per text channel, `%{channel_id => count}`, counted up to 100 (ADR 0018).
+  """
+  def mention_counts(%User{id: user_id}, channel_ids) do
+    Map.new(channel_ids, fn channel_id ->
+      mentions =
+        from m in Message,
+          left_join: r in ReadState,
+          on: r.channel_id == m.channel_id and r.user_id == ^user_id,
+          where:
+            m.channel_id == ^channel_id and
+              (is_nil(m.author_id) or m.author_id != ^user_id) and
+              (is_nil(r.last_read_seq) or m.seq > r.last_read_seq) and
+              (fragment("? = ANY(?)", type(^user_id, :binary_id), m.mentions) or
+                 not is_nil(m.mention_scope)),
+          select: m.id,
+          limit: @unread_cap
+
+      {channel_id, Repo.aggregate(subquery(mentions), :count)}
+    end)
+  end
+
   @doc "Read positions, for the user's data export."
   def read_states_of(%User{id: user_id}) do
     Repo.all(
@@ -366,6 +389,20 @@ defmodule Nosilence.Messaging do
       reactions: reactions,
       inserted_at: m.inserted_at
     }
+  end
+
+  @doc """
+  Who put `emoji` on a channel message (names, at most 20) and how many in all
+  (ADR 0018). Only for members of its community.
+  """
+  def reactors(%User{} = user, message_id, emoji) do
+    with {:ok, id} <- Ecto.UUID.cast(message_id),
+         %Message{} = message <- Repo.get(Message, id),
+         {:ok, _, _} <- text_channel(user, message.channel_id, :view) do
+      {:ok, Reactions.reactors(:channel, message.id, emoji)}
+    else
+      _ -> {:error, :not_found}
+    end
   end
 
   @doc "The author as messages show them: name and picture version."

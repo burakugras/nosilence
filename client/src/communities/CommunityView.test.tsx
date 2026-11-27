@@ -24,7 +24,8 @@ vi.mock('../api/communities', () => ({
       community: { id: C, name: 'Ekip', role },
       channels: [
         { id: VOICE, name: 'General', kind: 'voice', capacity: 8 },
-        { id: T1, name: 'general', kind: 'text', capacity: null, unread: 0 },
+        // The server still counts two mentions in the channel that opens first.
+        { id: T1, name: 'general', kind: 'text', capacity: null, unread: 0, mentions: 2 },
         { id: T2, name: 'news', kind: 'text', capacity: null, unread: 4 },
       ],
     }),
@@ -67,6 +68,7 @@ vi.mock('../api/messages', () => ({
     }),
   markRead: () => Promise.resolve(),
   reactToMessage: () => Promise.resolve(),
+  listReactors: () => Promise.resolve({ names: [], total: 0 }),
   sendMessage: (_channel: string, text: string) => {
     sent.push(text)
     return Promise.resolve({ ...message('m22', text, 'u1') })
@@ -265,6 +267,21 @@ describe('a community', () => {
       }),
     )
     expect(screen.getByRole('link', { name: '#news, 5 unread' })).toBeInTheDocument()
+  })
+
+  it("the open channel's mentions do not count; mentions elsewhere arrive live (ADR 0018)", async () => {
+    const { state } = renderCommunity()
+    expect(await screen.findByRole('link', { name: '#general' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    act(() =>
+      state.listener!.event({
+        type: 'message_created',
+        message: { ...message('m77777', 'hey @me'), channel_id: T2, mentions: ['u1'] },
+      }),
+    )
+    expect(screen.getByRole('link', { name: '#news, 1 mentions, 5 unread' })).toBeInTheDocument()
   })
 
   it('opens the text channel in the address', async () => {
