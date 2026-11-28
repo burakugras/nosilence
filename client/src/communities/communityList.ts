@@ -10,7 +10,7 @@ import type { MessageNotice } from '../gateway/types'
 import { onUserEvent } from '../gateway/userLive'
 
 let list: CommunitySummary[] | undefined
-let openChannelId: string | undefined
+let openChannel: string | undefined
 const listeners = new Set<() => void>()
 
 function set(next: CommunitySummary[] | undefined) {
@@ -28,8 +28,11 @@ export async function refreshCommunities(load = listCommunities) {
 
 /** The text channel on screen; its messages do not add to the badge. */
 export function setOpenChannel(channelId: string | undefined) {
-  openChannelId = channelId
+  openChannel = channelId
 }
+
+/** The text channel on screen, if any. */
+export const openChannelId = () => openChannel
 
 /** Unread and mention counts for one community, as the community view knows them best. */
 export function setCommunityUnread(communityId: string, unread: number, mentions = 0) {
@@ -46,7 +49,7 @@ export function followCommunities(): () => void {
     if (event === 'joined') return void refreshCommunities()
     if (event !== 'notify' || !list) return
     const notice = payload as MessageNotice
-    if (notice.channel_id === openChannelId) return
+    if (notice.channel_id === openChannel) return
     if (!list.some((c) => c.id === notice.community_id)) return void refreshCommunities()
     set(
       list.map((c) =>

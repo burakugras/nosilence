@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { startSounds } from './sounds/sounds'
 import { followBlocked } from './social/blockedStore'
 import { onDeepLink } from './platform'
 import { inviteToken } from './communities/inviteLink'
@@ -70,6 +71,8 @@ export default function App({ loadUser = currentUser }: Props) {
   useEffect(() => (userId ? startIdleWatch() : undefined), [userId])
   useEffect(() => (userId ? followLevels() : undefined), [userId])
   useEffect(() => (userId ? followBlocked() : undefined), [userId])
+  // Interaction sounds (ADR 0020).
+  useEffect(() => (userId ? startSounds(userId) : undefined), [userId])
   useEffect(() => (userId ? startMessageNotifications(userId) : undefined), [userId])
   useEffect(() => (userId ? followConversations() : undefined), [userId])
   useEffect(() => (userId ? followCommunities() : undefined), [userId])

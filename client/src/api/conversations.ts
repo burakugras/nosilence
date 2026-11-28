@@ -14,6 +14,8 @@ export type ConversationSummary = {
   last_message_at: string | null
   /** Messages from others not read yet (up to 100). */
   unread: number
+  /** False when the user cannot write here (a block, or no permission to start). */
+  can_write?: boolean
 }
 
 export const listConversations = async () =>

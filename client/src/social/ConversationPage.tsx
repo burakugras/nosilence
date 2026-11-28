@@ -145,6 +145,11 @@ export function ConversationPage({
       currentUserId={currentUserId}
       canDeleteAny={false}
       people={conversation.members}
+      closed={
+        conversation.can_write === false
+          ? 'You cannot send messages in this conversation.'
+          : undefined
+      }
       live={live}
     />
   )

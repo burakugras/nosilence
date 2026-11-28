@@ -120,6 +120,8 @@ type Props = {
   people?: Mentionable[]
   /** Moderators and owners may mention @everyone and @here. */
   canMentionEveryone?: boolean
+  /** Writing is not possible here: why, shown instead of the composer. */
+  closed?: string
 }
 
 export function TextChannel({
@@ -138,6 +140,7 @@ export function TextChannel({
   onUnreadChange,
   people = [],
   canMentionEveryone = false,
+  closed,
 }: Props) {
   const [history, setHistory] = useState<History>()
   const [text, setText] = useState('')
@@ -420,8 +423,9 @@ export function TextChannel({
     if (wait.secondsLeft > 0) return
     const error = messageError(text)
     if (error) return setMessage(error)
+    // The last error stays until the send succeeds: clearing it first made it
+    // vanish and come back on every try, and the page jumped.
     setSending(true)
-    setMessage(undefined)
     try {
       const sentMessage = await api.send(
         channel.id,
@@ -433,6 +437,7 @@ export function TextChannel({
       update((ms) => merge(ms, [sentMessage]))
       setSent((n) => n + 1)
       setText('')
+      setMessage(undefined)
     } catch (e) {
       if (e instanceof ApiError && e.retryAfter) {
         // Keep the text; show a countdown instead of an error that goes stale.
@@ -524,6 +529,11 @@ export function TextChannel({
       setMessage(e instanceof ApiError ? e.message : 'Could not save the reaction.')
     }
   }
+
+  const problem =
+    wait.secondsLeft > 0
+      ? `${waitReason} You can send again in ${formatWait(wait.secondsLeft)}.`
+      : message
 
   // Usernames of the people each message mentions, for highlighting.
   const usernames = new Map(people.flatMap((p) => (p.username ? [[p.id, p.username]] : [])))
@@ -729,51 +739,66 @@ export function TextChannel({
           />
         </Popover>
       )}
-      <form className="composer" onSubmit={(e) => void send(e)} aria-label="Send a message">
-        {typing && suggested.length > 0 && (
-          <ul className="mention-suggestions" role="listbox" aria-label="Mention someone">
-            {suggested.map((s, i) => (
-              <li
-                key={s.key}
-                role="option"
-                aria-selected={i === typing.index}
-                // mousedown: keep the focus in the text box.
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  pickSuggestion(s.insert)
-                }}
-              >
-                <strong>{s.label}</strong>
-                {s.detail && <span className="muted">{s.detail}</span>}
-              </li>
-            ))}
-          </ul>
+      {/* The composer, and above its top right corner any problem (sending too
+          fast, a refused send): floating, so nothing below or around it moves.
+          The composer's border turns red while there is one (Burak's choice). */}
+      <div className="composer-area">
+        {problem && (
+          <p className="composer-error" role="alert">
+            {problem}
+          </p>
         )}
-        <textarea
-          ref={composer}
-          aria-label={`Message ${composerName}`}
-          placeholder={`Message ${composerName}`}
-          value={text}
-          maxLength={MAX_MESSAGE}
-          rows={1}
-          aria-autocomplete="list"
-          aria-expanded={!!typing && suggested.length > 0}
-          onChange={(e) => onComposerChange(e.target.value, e.target.selectionStart)}
-          onKeyDown={onKeyDown}
-          onBlur={() => setTyping(null)}
-        />
-        <button type="submit" disabled={sending || wait.secondsLeft > 0}>
-          Send
-        </button>
-      </form>
-      <p className="composer-hint">Enter to send, Shift+Enter for a new line</p>
-      <FormMessage
-        text={
-          wait.secondsLeft > 0
-            ? `${waitReason} You can send again in ${formatWait(wait.secondsLeft)}.`
-            : message
-        }
-      />
+        {closed ? (
+          <p className="composer-closed" role="note">
+            {closed}
+          </p>
+        ) : (
+          <>
+            <form
+              className={problem ? 'composer has-error' : 'composer'}
+              onSubmit={(e) => void send(e)}
+              aria-label="Send a message"
+            >
+              {typing && suggested.length > 0 && (
+                <ul className="mention-suggestions" role="listbox" aria-label="Mention someone">
+                  {suggested.map((s, i) => (
+                    <li
+                      key={s.key}
+                      role="option"
+                      aria-selected={i === typing.index}
+                      // mousedown: keep the focus in the text box.
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        pickSuggestion(s.insert)
+                      }}
+                    >
+                      <strong>{s.label}</strong>
+                      {s.detail && <span className="muted">{s.detail}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <textarea
+                ref={composer}
+                aria-label={`Message ${composerName}`}
+                placeholder={`Message ${composerName}`}
+                value={text}
+                maxLength={MAX_MESSAGE}
+                rows={1}
+                aria-autocomplete="list"
+                aria-expanded={!!typing && suggested.length > 0}
+                onChange={(e) => onComposerChange(e.target.value, e.target.selectionStart)}
+                onKeyDown={onKeyDown}
+                onBlur={() => setTyping(null)}
+              />
+              <button type="submit" disabled={sending || wait.secondsLeft > 0}>
+                Send
+              </button>
+            </form>
+            <p className="composer-hint">Enter to send, Shift+Enter for a new line</p>
+          </>
+        )}
+      </div>
     </section>
   )
 }

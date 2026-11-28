@@ -1,0 +1,322 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!--
+  Nosilence interaction sounds: a listening prototype (not part of the app).
+  Every sound is synthesised here with the Web Audio API: no recordings, no
+  sound packs. Three characters to choose from; each plays the same events.
+  Open this file in a browser and click.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nosilence sounds</title>
+    <style>
+      :root {
+        --bg: #15171c;
+        --panel: #1e2128;
+        --raised: #262a33;
+        --border: #313642;
+        --text: #e8eaf0;
+        --muted: #9aa1b1;
+        --accent: #6d78ff;
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 32px 24px 48px;
+        background: var(--bg);
+        color: var(--text);
+        font: 15px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 22px;
+      }
+      p.lead {
+        margin: 0 0 20px;
+        color: var(--muted);
+        max-width: 760px;
+      }
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 16px;
+      }
+      .palette {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+      }
+      .palette h2 {
+        margin: 0;
+        font-size: 17px;
+      }
+      /* Two lines for every description, so the rows line up across the columns. */
+      .palette .about {
+        margin: 2px 0 12px;
+        min-height: 3em;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .event {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 0;
+        border-top: 1px solid var(--border);
+        font-size: 14px;
+      }
+      .event small {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      button {
+        flex: none;
+        border: 0;
+        border-radius: 8px;
+        padding: 6px 12px;
+        background: var(--raised);
+        color: var(--text);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:hover {
+        background: var(--accent);
+      }
+      button.all {
+        width: 100%;
+        margin-top: 10px;
+        background: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Nosilence interaction sounds</h1>
+    <p class="lead">
+      Burak chose the glass character, softer and with more character. A is the first version
+      for comparison; A1 is softer; A2 adds a signature motif and a muffled-to-open tone for
+      the microphone and hearing. Every sound is made by code in the browser.
+    </p>
+    <div class="controls">
+      <label for="volume">Volume</label>
+      <input id="volume" type="range" min="0" max="1" step="0.05" value="0.6" />
+    </div>
+    <div class="grid" id="grid"></div>
+
+    <script>
+      let ctx
+      let master
+      let reverb
+      const volume = document.getElementById('volume')
+
+      // A small room: decaying noise as the impulse response, made here.
+      function room(c, seconds = 1.6) {
+        const length = Math.ceil(c.sampleRate * seconds)
+        const impulse = c.createBuffer(2, length, c.sampleRate)
+        for (let ch = 0; ch < 2; ch++) {
+          const data = impulse.getChannelData(ch)
+          for (let i = 0; i < length; i++)
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 3.2)
+        }
+        const conv = c.createConvolver()
+        conv.buffer = impulse
+        return conv
+      }
+
+      function audio() {
+        if (!ctx) {
+          ctx = new AudioContext()
+          master = ctx.createGain()
+          master.gain.value = Number(volume.value)
+          // A gentle limiter so stacked notes never clip.
+          const limit = ctx.createDynamicsCompressor()
+          limit.threshold.value = -12
+          limit.ratio.value = 6
+          master.connect(limit).connect(ctx.destination)
+          reverb = ctx.createGain()
+          reverb.gain.value = 0.32
+          reverb.connect(room(ctx)).connect(master)
+        }
+        return ctx
+      }
+      volume.oninput = () => master && (master.gain.value = Number(volume.value))
+
+      /**
+       * A note: oscillators through a low-pass filter and an envelope.
+       * `partials` add overtones; `detune` (cents) adds a second, slightly
+       * shifted voice for warmth; `filter`/`filterTo` close or open the tone
+       * (a muffled sound opening up); `wet` sends some of it to the room.
+       */
+      function note({
+        at = 0, freq, to, dur = 0.25, type = 'sine', gain = 0.3, attack = 0.005,
+        partials = [], glide = 0.05, filter = 12000, filterTo, sweep = 0.25,
+        detune = 0, wet = 0,
+      }) {
+        const c = audio()
+        const t = c.currentTime + 0.02 + at
+        const lp = c.createBiquadFilter()
+        lp.type = 'lowpass'
+        lp.Q.value = 0.7
+        lp.frequency.setValueAtTime(filter, t)
+        if (filterTo) lp.frequency.exponentialRampToValueAtTime(filterTo, t + sweep)
+        const env = c.createGain()
+        env.gain.setValueAtTime(0, t)
+        env.gain.linearRampToValueAtTime(gain, t + attack)
+        env.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+        lp.connect(env)
+        env.connect(master)
+        if (wet) {
+          const send = c.createGain()
+          send.gain.value = wet
+          env.connect(send).connect(reverb)
+        }
+        const voices = detune ? [-detune, detune] : [0]
+        for (const cents of voices)
+          for (const [ratio, level] of [[1, 1], ...partials]) {
+            const o = c.createOscillator()
+            const g = c.createGain()
+            o.type = type
+            o.detune.value = cents
+            o.frequency.setValueAtTime(freq * ratio, t)
+            if (to) o.frequency.exponentialRampToValueAtTime(to * ratio, t + glide)
+            g.gain.value = level / voices.length
+            o.connect(g).connect(lp)
+            o.start(t)
+            o.stop(t + dur + 0.05)
+          }
+      }
+
+      // Notes (Hz) of a pentatonic scale, so any two of them sound well together.
+      const N = { C4: 261.63, D4: 293.66, E4: 329.63, G4: 392, A4: 440, C5: 523.25, D5: 587.33, E5: 659.25, G5: 783.99, A5: 880, C6: 1046.5, D6: 1174.66, E6: 1318.5, G6: 1567.98 }
+
+      // A: the first version (bright bells with inharmonic overtones).
+      const bell = [[2.76, 0.25], [5.4, 0.08]]
+      const glass = (o) => note({ type: 'sine', partials: bell, dur: 0.9, gain: 0.22, ...o })
+
+      // A1: softer glass. An octave lower, harmonic overtones only, a slow
+      // attack (no click), highs rolled off, two voices and a little room.
+      const soft = (o) =>
+        note({
+          type: 'sine', partials: [[2, 0.14], [3, 0.04]], dur: 1.3, gain: 0.24,
+          attack: 0.022, filter: 2600, detune: 4, wet: 0.35, ...o,
+        })
+
+      // A2: A1 plus a signature, the three notes E-G-C ("no-si-lence"), and
+      // a closing/opening tone for the microphone and hearing: muffled when off.
+      const sig = [N.E5, N.G5, N.C6]
+      const closing = (o) => soft({ filter: 2600, filterTo: 380, sweep: 0.22, dur: 0.6, ...o })
+      const opening = (o) => soft({ filter: 380, filterTo: 2800, sweep: 0.22, dur: 0.7, ...o })
+
+      const EVENTS = [
+        ['join', 'You join a voice channel'],
+        ['leave', 'You leave it'],
+        ['otherJoin', 'Someone joins your channel'],
+        ['otherLeave', 'Someone leaves your channel'],
+        ['mute', 'Microphone off'],
+        ['unmute', 'Microphone on'],
+        ['deafen', 'Deafen'],
+        ['undeafen', 'Undeafen'],
+        ['lost', 'Connection lost'],
+        ['back', 'Connection back'],
+        ['message', 'Direct message'],
+        ['mention', 'Someone mentions you'],
+      ]
+
+      const PALETTES = [
+        {
+          name: 'A · Glass (first version)',
+          about: 'For comparison: bright bells with a long, clear ring.',
+          sounds: {
+            join: () => { glass({ freq: N.C6 }); glass({ at: 0.11, freq: N.G6 }) },
+            leave: () => { glass({ freq: N.G6 }); glass({ at: 0.11, freq: N.C6, gain: 0.18 }) },
+            otherJoin: () => glass({ freq: N.E6, dur: 0.7, gain: 0.16 }),
+            otherLeave: () => glass({ freq: N.A5, dur: 0.6, gain: 0.13 }),
+            mute: () => glass({ freq: N.E5, dur: 0.18, gain: 0.2, partials: [] }),
+            unmute: () => glass({ freq: N.A5, dur: 0.18, gain: 0.2, partials: [] }),
+            deafen: () => { glass({ freq: N.D6, dur: 0.25 }); glass({ at: 0.08, freq: N.A5, dur: 0.35 }) },
+            undeafen: () => { glass({ freq: N.A5, dur: 0.25 }); glass({ at: 0.08, freq: N.D6, dur: 0.35 }) },
+            lost: () => { glass({ freq: N.E5, to: N.D5, glide: 0.3, dur: 0.6 }); glass({ at: 0.18, freq: N.C5, dur: 0.7, gain: 0.15 }) },
+            back: () => { glass({ freq: N.C6, dur: 0.5 }); glass({ at: 0.07, freq: N.E6, dur: 0.5 }); glass({ at: 0.14, freq: N.G6, dur: 0.8 }) },
+            message: () => glass({ freq: N.G6, dur: 0.5, gain: 0.12 }),
+            mention: () => { glass({ freq: N.E6, dur: 0.4 }); glass({ at: 0.1, freq: N.A5 * 2, dur: 0.6 }) },
+          },
+        },
+        {
+          name: 'A1 · Soft glass',
+          about: 'The same bells an octave lower, rounder and warmer, with a little room.',
+          sounds: {
+            join: () => { soft({ freq: N.C5 }); soft({ at: 0.13, freq: N.G5 }) },
+            leave: () => { soft({ freq: N.G5 }); soft({ at: 0.13, freq: N.C5, gain: 0.18 }) },
+            otherJoin: () => soft({ freq: N.E5, dur: 1, gain: 0.18 }),
+            otherLeave: () => soft({ freq: N.A4, dur: 0.9, gain: 0.15 }),
+            mute: () => soft({ freq: N.E4, dur: 0.35, gain: 0.22, wet: 0.15 }),
+            unmute: () => soft({ freq: N.A4, dur: 0.35, gain: 0.22, wet: 0.15 }),
+            deafen: () => { soft({ freq: N.D5, dur: 0.5 }); soft({ at: 0.1, freq: N.A4, dur: 0.7 }) },
+            undeafen: () => { soft({ freq: N.A4, dur: 0.5 }); soft({ at: 0.1, freq: N.D5, dur: 0.7 }) },
+            lost: () => { soft({ freq: N.E5, to: N.D5, glide: 0.35, dur: 0.9 }); soft({ at: 0.22, freq: N.C4, dur: 1.1, gain: 0.16 }) },
+            back: () => { soft({ freq: N.C5, dur: 0.7 }); soft({ at: 0.09, freq: N.E5, dur: 0.7 }); soft({ at: 0.18, freq: N.G5, dur: 1.1 }) },
+            message: () => soft({ freq: N.G5, dur: 0.8, gain: 0.14 }),
+            mention: () => { soft({ freq: N.E5, dur: 0.6 }); soft({ at: 0.12, freq: N.A5, dur: 0.9 }) },
+          },
+        },
+        {
+          name: 'A2 · Signature',
+          about: 'Soft glass with a motif of its own (E-G-C). Microphone and hearing close and open.',
+          sounds: {
+            join: () => sig.forEach((f, i) => soft({ at: i * 0.1, freq: f, gain: 0.2 })),
+            leave: () => [...sig].reverse().forEach((f, i) => soft({ at: i * 0.1, freq: f, gain: 0.17 })),
+            otherJoin: () => { soft({ freq: sig[1], gain: 0.16, dur: 0.9 }); soft({ at: 0.1, freq: sig[2], gain: 0.16 }) },
+            otherLeave: () => { soft({ freq: sig[2], gain: 0.14, dur: 0.9 }); soft({ at: 0.1, freq: sig[1], gain: 0.14 }) },
+            mute: () => closing({ freq: N.G4, gain: 0.26 }),
+            unmute: () => opening({ freq: N.G4, gain: 0.26 }),
+            deafen: () => { closing({ freq: N.C5, gain: 0.22 }); closing({ at: 0.09, freq: N.G4, gain: 0.22, dur: 0.8 }) },
+            undeafen: () => { opening({ freq: N.G4, gain: 0.22 }); opening({ at: 0.09, freq: N.C5, gain: 0.22, dur: 0.9 }) },
+            lost: () => { soft({ freq: sig[0], gain: 0.18 }); soft({ at: 0.12, freq: sig[1], gain: 0.18 }); soft({ at: 0.26, freq: sig[1], to: N.D5, glide: 0.4, dur: 1.1, gain: 0.16 }) },
+            back: () => { sig.forEach((f, i) => soft({ at: i * 0.09, freq: f, gain: 0.18 })); soft({ at: 0.3, freq: N.G6, gain: 0.08, dur: 1.2 }) },
+            message: () => soft({ freq: sig[1], gain: 0.15, dur: 0.9 }),
+            mention: () => { soft({ freq: sig[1], gain: 0.18 }); soft({ at: 0.12, freq: sig[2], gain: 0.18, dur: 1.1 }) },
+          },
+        },
+      ]
+
+      const grid = document.getElementById('grid')
+      for (const p of PALETTES) {
+        const box = document.createElement('section')
+        box.className = 'palette'
+        box.innerHTML = `<h2>${p.name}</h2><p class="about">${p.about}</p>`
+        for (const [key, label] of EVENTS) {
+          const row = document.createElement('div')
+          row.className = 'event'
+          row.innerHTML = `<span>${label}</span>`
+          const b = document.createElement('button')
+          b.textContent = 'Play'
+          b.onclick = () => p.sounds[key]()
+          row.append(b)
+          box.append(row)
+        }
+        const all = document.createElement('button')
+        all.className = 'all'
+        all.textContent = 'Play all, one after another'
+        all.onclick = () =>
+          EVENTS.forEach(([key], i) => setTimeout(() => p.sounds[key](), i * 1300))
+        box.append(all)
+        grid.append(box)
+      }
+    </script>
+  </body>
+</html>

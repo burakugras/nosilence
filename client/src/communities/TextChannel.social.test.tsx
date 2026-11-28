@@ -136,4 +136,25 @@ describe('reactions and mentions in the chat (ADR 0017)', () => {
       setBlockedForTests([])
     }
   })
+
+  it('when writing is not possible, a note stands in for the composer', async () => {
+    const handlers = new Set<(e: LiveEvent) => void>()
+    render(
+      <TextChannel
+        channel={{ id: 'd1', name: 'Ayşe' }}
+        api={
+          {
+            list: () => Promise.resolve({ messages: [], has_more: false, read: null }),
+            markRead: () => Promise.resolve(),
+          } as unknown as MessageApi
+        }
+        currentUserId="me"
+        canDeleteAny={false}
+        live={{ generation: 1, subscribe: (h) => (handlers.add(h), () => handlers.delete(h)) }}
+        closed="You cannot send messages in this conversation."
+      />,
+    )
+    expect(await screen.findByRole('note')).toHaveTextContent('You cannot send messages')
+    expect(screen.queryByRole('textbox')).toBeNull()
+  })
 })
